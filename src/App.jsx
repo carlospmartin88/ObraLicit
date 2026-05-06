@@ -528,24 +528,37 @@ export default function App() {
 
   // ── SESIÓN AUTH ──────────────────────────────────────────────────────────────
   useEffect(()=>{
+    // Timeout de seguridad — máximo 6 segundos de espera
+    const timeout = setTimeout(() => setLoading(false), 6000)
+
     supabase.auth.getSession().then(async ({ data: { session } })=>{
+      clearTimeout(timeout)
       setSession(session)
       if (session) {
-        const { data: co } = await supabase.from('companies').select('*').eq('id', session.user.id).single()
-        setCompany(co)
+        try {
+          const { data: co } = await supabase.from('companies').select('*').eq('id', session.user.id).single()
+          setCompany(co)
+        } catch(e) { console.warn('Empresa no cargada:', e) }
       }
       setLoading(false)
+    }).catch(e => {
+      clearTimeout(timeout)
+      console.error('Error sesion:', e)
+      setLoading(false)
     })
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_e, session) => {
       setSession(session)
       if (session) {
-        const { data: co } = await supabase.from('companies').select('*').eq('id', session.user.id).single()
-        setCompany(co)
+        try {
+          const { data: co } = await supabase.from('companies').select('*').eq('id', session.user.id).single()
+          setCompany(co)
+        } catch(e) { console.warn('Empresa no cargada:', e) }
       } else {
         setCompany(null)
       }
     })
-    return () => subscription.unsubscribe()
+    return () => { clearTimeout(timeout); subscription.unsubscribe() }
   }, [])
 
   // ── CARGAR DATOS ─────────────────────────────────────────────────────────────
