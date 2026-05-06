@@ -630,13 +630,13 @@ export default function App() {
   async function handleBid(proyectoId, partidaId, form) {
     const bid = { id:'B'+uid(), proyectoId, partidaId, empresa:user.empresa, contacto:user.nombre, telefono:form.tel||'', precio:form.precio, plazo:form.plazo, observaciones:form.obs||'', estado:'pendiente', fecha:new Date().toISOString().split('T')[0], feedback:null, rating:null, feedbackTags:[] }
     await insertBid(bid)  // realtime will update state automatically
-    showToast('✅ Oferta publicada — visible para todos en tiempo real')
+    showToast('Oferta publicada correctamente')
   }
 
   async function handleNewProject(data) {
     const proj = { id:'P'+uid(), slug:slugify(data.nombre), nombre:data.nombre, empresa:user.empresa, eInit:user.empresa.slice(0,2).toUpperCase(), eColor:COLORS[Math.floor(Math.random()*COLORS.length)], descripcion:data.desc, ubicacion:data.ubic||'España', fechaCierre:data.fecha, createdAt:new Date().toISOString().split('T')[0], tags:data.tags, estado:'abierta', partidas:data.partidas, views:1 }
     await insertProject(proj)
-    showToast('🎉 Licitación publicada — ya visible para toda la red')
+    showToast('Licitacion publicada para todos')
   }
 
   async function handleOpenDetail(id) {
@@ -647,7 +647,7 @@ export default function App() {
   function copyLink(slug) {
     const url = `${window.location.origin}/?l=${slug}`
     navigator.clipboard?.writeText?.(url).catch(()=>{})
-    showToast('🔗 Enlace copiado — compártelo con cualquiera')
+    showToast('Enlace copiado')
   }
 
   /* LOADING SCREEN */
@@ -790,7 +790,7 @@ export default function App() {
               const dlText   = proj.estado==='cerrada'?'Cerrada':dl<=0?'Vence hoy':`${dl}d restantes`
 
               return (
-                <article key={proj.id} style={{ background:'var(--white)', borderRadius:'var(--r-lg)', border:'1px solid var(--border)', boxShadow:'var(--sh)', overflow:'hidden', transition:'.2s', animation:`fadeUp .3s ease ${i*0.05}s both', cursor:'default' }}>
+                <article key={proj.id} style={{ background:'var(--white)', borderRadius:'var(--r-lg)', border:'1px solid var(--border)', boxShadow:'var(--sh)', overflow:'hidden', transition:'.2s', animation:`fadeUp .3s ease ${i*0.05}s both`, cursor:'default' }}>
                   <div style={{ padding:'20px 22px 14px' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:11, flexWrap:'wrap' }}>
                       <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, fontWeight:600, color:'var(--ink2)' }}>
@@ -814,7 +814,7 @@ export default function App() {
                   </div>
                   {/* Stats bar */}
                   <div style={{ display:'flex', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)', background:'var(--bg)' }}>
-                    {[['PARTIDAS',proj.partidas.length,''],['PRESUP. REF.',fmt(totalRef),'var(--accent)'],['OFERTAS',projBids.length,''],best?['MEJOR OFERTA',fmt(best.precio),'var(--green)']:null,['VISITAS',`👁 ${proj.views}`,'']].filter(Boolean).map(([l,v,c],idx,arr)=>(
+                    {[['PARTIDAS',proj.partidas.length,''],['PRESUP. REF.',fmt(totalRef),'var(--accent)'],['OFERTAS',projBids.length,''],best?['MEJOR OFERTA',fmt(best.precio),'var(--green)']:null,['VISITAS',proj.views,'']].filter(Boolean).map(([l,v,c],idx,arr)=>(
                       <div key={l} style={{ flex:1, padding:'10px 14px', borderRight:idx<arr.length-1?'1px solid var(--border)':'none' }}>
                         <div style={{ fontFamily:'JetBrains Mono,monospace', fontSize:14, fontWeight:500, color:c||'var(--ink)' }}>{v}</div>
                         <div style={{ fontSize:10, color:'var(--muted)', fontWeight:700, letterSpacing:'.04em', marginTop:2 }}>{l}</div>
@@ -834,7 +834,7 @@ export default function App() {
                     </button>
                     <button onClick={()=>setFavs(f=>f.includes(proj.id)?f.filter(x=>x!==proj.id):[...f,proj.id])}
                       style={{ display:'flex', alignItems:'center', gap:5, padding:'8px 13px', borderRadius:8, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, cursor:'pointer', background:isFav?'var(--accent-l)':'transparent', color:isFav?'var(--accent)':'var(--muted)', border:`1.5px solid ${isFav?'var(--accent)':'var(--border)'}` }}>
-                      {isFav?'♥ Guardada':'♡ Guardar'}
+                      {isFav?'Guardada':'Guardar'}
                     </button>
                     <div style={{ marginLeft:'auto', fontFamily:'Syne,sans-serif', fontSize:11, fontWeight:700, padding:'6px 12px', borderRadius:8, display:'flex', alignItems:'center', gap:4, ...dlStyle }}>
                       <Ic n="clock" s={11}/>{dlText}
@@ -850,7 +850,7 @@ export default function App() {
       {/* MODALS & PANELS */}
       {detailProj && <DetailPanel proj={detailProj} bids={bids} user={user} onClose={()=>setDetailId(null)} onBid={handleBid} onLogin={()=>setShowLogin(true)}/>}
       {showNew    && <NewProjectModal user={user} onClose={()=>setShowNew(false)} onSubmit={handleNewProject} onLogin={()=>{setShowNew(false);setShowLogin(true)}}/>}
-      {showLogin  && <LoginModal onClose={()=>setShowLogin(false)} onLogin={u=>{setUser(u);setShowLogin(false);showToast(`👋 Bienvenido, ${u.nombre}`)}}/>}
+      {showLogin  && <LoginModal onClose={()=>setShowLogin(false)} onLogin={u=>{setUser(u);setShowLogin(false);showToast('Bienvenido, ' + u.nombre)}}/>}
       {toast      && <Toast msg={toast}/>}
     </>
   )
