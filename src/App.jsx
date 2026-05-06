@@ -516,7 +516,8 @@ export default function App() {
   const [company,    setCompany]    = useState(null)
   const [projects,   setProjects]   = useState([])
   const [bids,       setBids]       = useState([])
-  const [loading,    setLoading]    = useState(true)
+  const [authReady,  setAuthReady]  = useState(false)  // sesión resuelta
+  const [dataLoaded, setDataLoaded] = useState(false)  // datos cargados
   const [activeTags, setActiveTags] = useState([])
   const [sortBy,     setSortBy]     = useState('reciente')
   const [search,     setSearch]     = useState('')
@@ -528,11 +529,7 @@ export default function App() {
 
   // ── SESIÓN AUTH ──────────────────────────────────────────────────────────────
   useEffect(()=>{
-    // Timeout de seguridad — máximo 6 segundos de espera
-    const timeout = setTimeout(() => setLoading(false), 6000)
-
     supabase.auth.getSession().then(async ({ data: { session } })=>{
-      clearTimeout(timeout)
       setSession(session)
       if (session) {
         try {
@@ -540,11 +537,10 @@ export default function App() {
           setCompany(co)
         } catch(e) { console.warn('Empresa no cargada:', e) }
       }
-      setLoading(false)
+      setAuthReady(true)
     }).catch(e => {
-      clearTimeout(timeout)
       console.error('Error sesion:', e)
-      setLoading(false)
+      setAuthReady(true)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_e, session) => {
@@ -557,23 +553,29 @@ export default function App() {
       } else {
         setCompany(null)
       }
+      setAuthReady(true)
     })
-    return () => { clearTimeout(timeout); subscription.unsubscribe() }
+    return () => subscription.unsubscribe()
   }, [])
 
-  // ── CARGAR DATOS ─────────────────────────────────────────────────────────────
+  // ── CARGAR DATOS — independiente de la sesión ────────────────────────────────
   useEffect(()=>{
-    if (loading) return
     loadData()
-  }, [loading])
+  }, [])
 
   async function loadData() {
-    const [{ data: p }, { data: b }] = await Promise.all([
-      supabase.from('projects').select('*').order('created_at', { ascending:false }),
-      supabase.from('bids').select('*').order('fecha', { ascending:false })
-    ])
-    if (p) setProjects(p)
-    if (b) setBids(b)
+    try {
+      const [{ data: p }, { data: b }] = await Promise.all([
+        supabase.from('projects').select('*').order('created_at', { ascending:false }),
+        supabase.from('bids').select('*').order('fecha', { ascending:false })
+      ])
+      if (p) setProjects(p)
+      if (b) setBids(b)
+    } catch(e) {
+      console.error('Error cargando datos:', e)
+    } finally {
+      setDataLoaded(true)
+    }
   }
 
   // ── REALTIME ─────────────────────────────────────────────────────────────────
@@ -686,17 +688,17 @@ export default function App() {
     await supabase.rpc('increment_views', { project_id: id })
   }
 
-  // ── LOADING ──────────────────────────────────────────────────────────────────
-  if (loading) return (
+  // ── LOADING — espera sesión Y datos ──────────────────────────────────────────
+  if (!authReady || !dataLoaded) return (
     <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#f2f0eb', flexDirection:'column', gap:14 }}>
       <div style={{ width:48, height:48, background:'#18170f', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', fontSize:24, fontWeight:800, color:'#e85d04', fontFamily:'Syne,sans-serif' }}>O</div>
-      <div style={{ fontSize:14, color:'#888', fontFamily:'Syne,sans-serif' }}>Conectando...</div>
+      <div style={{ fontSize:14, color:'#888', fontFamily:'Syne,sans-serif' }}>Cargando ObraLicit...</div>
     </div>
   )
 
   // ── LOGIN REQUERIDO ───────────────────────────────────────────────────────────
   if (!session) return (
-    <AuthScreen onLogin={(user, co) => { setSession({ user }); setCompany(co); loadData() }} />
+    <AuthScreen onLogin={(user, co) => { setSession({ user }); setCompany(co) }} />
   )
 
   // ── APP PRINCIPAL ─────────────────────────────────────────────────────────────
