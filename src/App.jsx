@@ -890,7 +890,11 @@ export default function App() {
 
   // ── SESIÓN: se resuelve independientemente ───────────────────────────────────
   useEffect(()=>{
+    // Timeout de seguridad: si en 4s no responde Supabase, mostramos el login
+    const safetyTimer = setTimeout(()=>{ setAuthReady(true) }, 4000)
+
     supabase.auth.getSession().then(async ({ data: { session } })=>{
+      clearTimeout(safetyTimer)
       setSession(session)
       if (session) {
         try {
@@ -899,9 +903,10 @@ export default function App() {
         } catch(e){ console.warn(e) }
       }
       setAuthReady(true)
-    }).catch(()=>setAuthReady(true))
+    }).catch(()=>{ clearTimeout(safetyTimer); setAuthReady(true) })
 
     const { data:{ subscription } } = supabase.auth.onAuthStateChange(async (_e,session)=>{
+      clearTimeout(safetyTimer)
       setSession(session)
       if (session) {
         try {
@@ -911,7 +916,7 @@ export default function App() {
       } else { setCompany(null) }
       setAuthReady(true)
     })
-    return ()=>subscription.unsubscribe()
+    return ()=>{ clearTimeout(safetyTimer); subscription.unsubscribe() }
   },[])
 
   // ── DATOS: se cargan independientemente de la sesión ─────────────────────────
@@ -1040,12 +1045,11 @@ export default function App() {
     setShowMsgs(true)
   }
 
-  // ── LOADING — espera sesión Y datos ──────────────────────────────────────────
-  if (!authReady || !dataLoaded) return (
+  // ── LOADING — solo espera la sesión, los datos cargan en segundo plano ────────
+  if (!authReady) return (
     <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#f2f0eb', flexDirection:'column', gap:14 }}>
       <div style={{ width:48, height:48, background:'#18170f', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', fontSize:24, fontWeight:800, color:'#e85d04', fontFamily:'Syne,sans-serif' }}>O</div>
-      <div style={{ fontSize:14, color:'#888', fontFamily:'Syne,sans-serif' }}>Cargando ObraLicit...</div>
-      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}`}</style>
+      <div style={{ fontSize:14, color:'#888', fontFamily:'Syne,sans-serif' }}>Conectando...</div>
     </div>
   )
 
