@@ -744,9 +744,9 @@ function EmpresasDirectorio({ currentUser, onNewMsg }) {
 }
 
 // ─── PANEL MENSAJES ───────────────────────────────────────────────────────────
-function MessagesPanel({ user, company, onClose }) {
+function MessagesPanel({ user, company, onClose, initialTarget }) {
   const [mensajes, setMensajes]   = useState([])
-  const [conv, setConv]           = useState(null) // empresa destinataria
+  const [conv, setConv]           = useState(initialTarget || null) // empresa destinataria
   const [texto, setTexto]         = useState('')
   const [asunto, setAsunto]       = useState('')
   const [loading, setLoading]     = useState(false)
@@ -888,25 +888,15 @@ export default function App() {
 
   const showToast = useCallback(msg=>{ setToast(msg); setTimeout(()=>setToast(null),2100) },[])
 
-  // ── SESIÓN: se resuelve independientemente ───────────────────────────────────
+  // ── SESIÓN ───────────────────────────────────────────────────────────────────
   useEffect(()=>{
-    // Timeout de seguridad: si en 4s no responde Supabase, mostramos el login
-    const safetyTimer = setTimeout(()=>{ setAuthReady(true) }, 4000)
+    // 1. Intentar recuperar sesión de la caché local de Supabase (instantáneo)
+    // 2. Si no hay caché, esperar máx 3s a Supabase
+    let resolved = false
+    const safetyTimer = setTimeout(()=>{ if(!resolved){ resolved=true; setAuthReady(true) } }, 3000)
 
-    supabase.auth.getSession().then(async ({ data: { session } })=>{
-      clearTimeout(safetyTimer)
-      setSession(session)
-      if (session) {
-        try {
-          const { data:co } = await supabase.from('companies').select('*').eq('id',session.user.id).single()
-          setCompany(co)
-        } catch(e){ console.warn(e) }
-      }
-      setAuthReady(true)
-    }).catch(()=>{ clearTimeout(safetyTimer); setAuthReady(true) })
-
-    const { data:{ subscription } } = supabase.auth.onAuthStateChange(async (_e,session)=>{
-      clearTimeout(safetyTimer)
+    const { data:{ subscription } } = supabase.auth.onAuthStateChange(async (_e, session)=>{
+      if (!resolved) { resolved=true; clearTimeout(safetyTimer) }
       setSession(session)
       if (session) {
         try {
@@ -916,6 +906,10 @@ export default function App() {
       } else { setCompany(null) }
       setAuthReady(true)
     })
+
+    // getSession dispara onAuthStateChange internamente — no necesitamos manejarlo por separado
+    supabase.auth.getSession().catch(()=>{ if(!resolved){ resolved=true; clearTimeout(safetyTimer); setAuthReady(true) } })
+
     return ()=>{ clearTimeout(safetyTimer); subscription.unsubscribe() }
   },[])
 
@@ -942,7 +936,11 @@ export default function App() {
   useEffect(()=>{
     const ch = supabase.channel('rt')
       .on('postgres_changes',{ event:'INSERT', schema:'public', table:'projects' },
-        payload=>setProjects(prev=>[payload.new,...prev]))
+        payload=>setProjects(prev=>{
+          // evitar duplicados si ya lo añadimos en handleNewProject
+          if (prev.find(p=>p.id===payload.new.id)) return prev
+          return [payload.new,...prev]
+        }))
       .on('postgres_changes',{ event:'INSERT', schema:'public', table:'bids' },
         payload=>setBids(prev=>[payload.new,...prev]))
       .on('postgres_changes',{ event:'UPDATE', schema:'public', table:'bids' },
@@ -1020,17 +1018,27 @@ export default function App() {
 
   async function handleNewProject(data) {
     const proj = {
-      id:'P'+uid(), slug:slugify(data.nombre), nombre:data.nombre,
-      empresa:company?.name||session.user.email,
-      e_init:(company?.name||'XX').slice(0,2).toUpperCase(),
-      e_color:COLORS[Math.floor(Math.random()*COLORS.length)],
-      descripcion:data.desc, ubicacion:data.ubic||'España', fecha_cierre:data.fecha,
-      tags:data.tags, estado:'abierta', partidas:data.partidas, views:0,
-      user_id:session.user.id, archivos:data.archivos||[],
-      email_contacto:data.email_contacto||''
+      id:           'P'+uid(),
+      slug:         slugify(data.nombre),
+      nombre:       data.nombre,
+      empresa:      company?.name || session.user.email,
+      e_init:       (company?.name||'XX').slice(0,2).toUpperCase(),
+      e_color:      COLORS[Math.floor(Math.random()*COLORS.length)],
+      descripcion:  data.desc,
+      ubicacion:    data.ubic || 'España',
+      fecha_cierre: data.fecha,        // snake_case correcto para Supabase
+      tags:         data.tags || [],
+      estado:       'abierta',
+      partidas:     data.partidas || [],
+      views:        0,
+      user_id:      session.user.id,
+      archivos:     data.archivos || [],
+      email_contacto: data.email_contacto || ''
     }
-    const { error } = await supabase.from('projects').insert([proj])
-    if (error) { showToast('Error: '+error.message); return }
+    const { data: inserted, error } = await supabase.from('projects').insert([proj]).select().single()
+    if (error) { console.error('Error insertando proyecto:', error); showToast('Error: '+error.message); return }
+    // Añadir al estado local inmediatamente (no esperar al realtime)
+    if (inserted) setProjects(prev=>[inserted,...prev])
     showToast('Licitación publicada para todos')
   }
 
@@ -1055,7 +1063,14 @@ export default function App() {
 
   // ── LOGIN ────────────────────────────────────────────────────────────────────
   if (!session) return (
-    <AuthScreen onLogin={(user,co)=>{ setSession({user}); setCompany(co) }}/>
+    <AuthScreen onLogin={async (user,co)=>{
+      setSession({user})
+      // Recargar company fresco desde DB para asegurar todos los campos incluido CIF
+      try {
+        const { data:coFresh } = await supabase.from('companies').select('*').eq('id',user.id).single()
+        setCompany(coFresh || co)
+      } catch(e){ setCompany(co) }
+    }}/>
   )
 
   // ── APP ───────────────────────────────────────────────────────────────────────
