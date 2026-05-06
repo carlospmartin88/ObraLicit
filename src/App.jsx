@@ -232,7 +232,6 @@ function DetailPanel({ proj, bids, user, onClose, onBid, onLogin }) {
     >
       <div style={{ marginLeft:'auto', width:'min(740px,100vw)', background:'var(--white)', height:'100vh', overflowY:'auto', boxShadow:'var(--sh-xl)', animation:'slideIn .25s cubic-bezier(.25,.46,.45,.94)' }}>
 
-        {/* HERO */}
         <div style={{ background:'var(--ink)', color:'#fff', padding:'26px 28px 22px' }}>
           <button onClick={onClose} style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:'rgba(255,255,255,.4)', cursor:'pointer', marginBottom:14, border:'none', background:'none', fontFamily:'Barlow,sans-serif', transition:'.15s' }}>
             <Ic n="back" s={13}/> Volver al feed
@@ -253,7 +252,6 @@ function DetailPanel({ proj, bids, user, onClose, onBid, onLogin }) {
               <Ic n="clock" s={11}/>{dl<=0?'Vence hoy':`${dl}d`}
             </div>
           </div>
-          {/* SHARE */}
           <div style={{ background:'rgba(255,255,255,.06)', border:'1px solid rgba(255,255,255,.1)', borderRadius:8, padding:'10px 14px', marginTop:14, display:'flex', alignItems:'center', gap:10 }}>
             <Ic n="globe" s={13} style={{ color:'rgba(255,255,255,.4)', flexShrink:0 }}/>
             <span style={{ fontFamily:'JetBrains Mono,monospace', fontSize:11, color:'rgba(255,255,255,.4)', flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
@@ -263,7 +261,6 @@ function DetailPanel({ proj, bids, user, onClose, onBid, onLogin }) {
               {copied ? <><Ic n="check" s={11}/> ¡Copiado!</> : <><Ic n="copy" s={11}/> Copiar enlace</>}
             </button>
           </div>
-          {/* KPIS */}
           <div style={{ display:'flex', gap:20, marginTop:14, flexWrap:'wrap' }}>
             {[['Presupuesto ref.',fmt(totalRef)],['Partidas',proj.partidas.length],['Ofertas',projBids.length],['Cierre',proj.fechaCierre]].map(([l,v])=>(
               <div key={l}>
@@ -274,7 +271,6 @@ function DetailPanel({ proj, bids, user, onClose, onBid, onLogin }) {
           </div>
         </div>
 
-        {/* BODY */}
         <div style={{ padding:'22px 28px' }}>
           <div style={{ fontFamily:'Syne,sans-serif', fontSize:11, fontWeight:700, letterSpacing:'.08em', color:'var(--muted)', textTransform:'uppercase', marginBottom:12, paddingBottom:8, borderBottom:'1px solid var(--border)' }}>
             Partidas y ofertas — 100% públicas
@@ -288,7 +284,6 @@ function DetailPanel({ proj, bids, user, onClose, onBid, onLogin }) {
 
             return (
               <div key={partida.id} style={{ border:'1px solid var(--border)', borderRadius:'var(--r)', overflow:'hidden', marginBottom:12 }}>
-                {/* Partida header */}
                 <div style={{ padding:'13px 15px', background:'var(--bg)', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap' }}>
                   <div>
                     <div style={{ fontFamily:'JetBrains Mono,monospace', fontSize:11, color:'var(--muted)' }}>{partida.codigo}</div>
@@ -338,23 +333,12 @@ function DetailPanel({ proj, bids, user, onClose, onBid, onLogin }) {
                           <span style={{ fontSize:11, color:'var(--muted)' }}>⏱ Plazo: {bid.plazo} días</span>
                           <span style={{ fontSize:11, color:'var(--muted)' }}>📅 {bid.fecha}</span>
                         </div>
-                        {bid.feedback && (
-                          <div style={{ marginTop:8, padding:'8px 10px', background:'var(--amber-l)', borderRadius:'var(--r-sm)', fontSize:12, color:'var(--amber)', borderLeft:'3px solid var(--amber)' }}>
-                            <strong>Feedback:</strong> "{bid.feedback}"
-                            {bid.feedbackTags?.length>0 && <div style={{ display:'flex', gap:5, flexWrap:'wrap', marginTop:5 }}>{bid.feedbackTags.map(t=><span key={t} style={{ padding:'2px 8px', background:'var(--white)', border:'1px solid var(--border)', borderRadius:4, fontSize:11, fontWeight:500 }}>{t}</span>)}</div>}
-                            {bid.rating && <Stars rating={bid.rating}/>}
-                          </div>
-                        )}
                       </div>
                       <div style={{ textAlign:'right' }}>
                         <div style={{ fontSize:10, color:'var(--muted)', marginBottom:2 }}>precio/ud</div>
                         <div style={{ fontFamily:'JetBrains Mono,monospace', fontSize:18, fontWeight:600, color:idx===0?'var(--green)':'var(--ink)' }}>{fmt(bid.precio)}</div>
                         <span style={{ fontSize:11, fontWeight:700, padding:'2px 7px', borderRadius:4, display:'inline-block', marginTop:3, ...(parseFloat(saving)>0 ? { background:'var(--green-l)', color:'var(--green)' } : { background:'var(--red-l)', color:'var(--red)' }) }}>
                           {parseFloat(saving)>0?'-':'+'}{Math.abs(saving)}% vs salida
-                        </span>
-                        <br/>
-                        <span style={{ fontSize:10, fontWeight:700, padding:'3px 8px', borderRadius:4, marginTop:4, display:'inline-block', ...(bid.estado==='adjudicada'?{background:'var(--green-l)',color:'var(--green)'}:bid.estado==='perdida'?{background:'#f0f0f0',color:'#888'}:{background:'#fff8e6',color:'#b07a10'}) }}>
-                          {bid.estado.toUpperCase()}
                         </span>
                       </div>
                     </div>
@@ -363,27 +347,6 @@ function DetailPanel({ proj, bids, user, onClose, onBid, onLogin }) {
               </div>
             )
           })}
-
-          {/* FEEDBACKS */}
-          {feedbacks.length > 0 && (
-            <>
-              <div style={{ fontFamily:'Syne,sans-serif', fontSize:11, fontWeight:700, letterSpacing:'.08em', color:'var(--muted)', textTransform:'uppercase', margin:'26px 0 12px', paddingBottom:8, borderBottom:'1px solid var(--border)' }}>Valoraciones públicas</div>
-              {feedbacks.map(bid => (
-                <div key={bid.id} style={{ background:'var(--bg)', borderRadius:'var(--r-sm)', padding:13, border:'1px solid var(--border)', marginBottom:10 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
-                    <div style={{ width:28, height:28, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, color:'#fff', background:proj.eColor }}>{proj.eInit}</div>
-                    <div>
-                      <div style={{ fontSize:13, fontWeight:600 }}>{proj.empresa} <span style={{ fontWeight:400, color:'var(--muted)' }}>sobre</span> {bid.empresa}</div>
-                      <div style={{ fontSize:11, color:'var(--muted)' }}>{bid.fecha}</div>
-                    </div>
-                    {bid.rating && <div style={{ marginLeft:'auto' }}><Stars rating={bid.rating}/></div>}
-                  </div>
-                  <div style={{ fontSize:13, color:'var(--ink2)', lineHeight:1.6 }}>"{bid.feedback}"</div>
-                  {bid.feedbackTags?.length>0 && <div style={{ display:'flex', gap:5, flexWrap:'wrap', marginTop:7 }}>{bid.feedbackTags.map(t=><span key={t} style={{ padding:'2px 8px', background:'var(--white)', border:'1px solid var(--border)', borderRadius:4, fontSize:11, fontWeight:500 }}>{t}</span>)}</div>}
-                </div>
-              ))}
-            </>
-          )}
         </div>
       </div>
     </div>
@@ -433,7 +396,6 @@ function NewProjectModal({ user, onClose, onSubmit, onLogin }) {
           <button onClick={onClose} style={{ width:32, height:32, borderRadius:'50%', background:'var(--bg)', border:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:'var(--muted)', fontSize:20 }}>×</button>
         </div>
         <div style={{ padding:'24px 28px' }}>
-          {/* Progress bar */}
           <div style={{ display:'flex', gap:6, marginBottom:22 }}>
             {[1,2].map(s=><div key={s} style={{ flex:1, height:4, borderRadius:2, background:s<=step?'var(--accent)':'var(--border)', transition:'.3s' }}/>)}
           </div>
@@ -546,7 +508,6 @@ function LoginModal({ onClose, onLogin }) {
             style={{ background:'var(--accent)', color:'#fff', border:'none', padding:14, borderRadius:'var(--r-sm)', fontFamily:'Syne,sans-serif', fontSize:14, fontWeight:700, cursor:'pointer', width:'100%', opacity:(nombre.trim()&&empresa.trim())?1:.4 }}>
             Entrar a la plataforma →
           </button>
-          <div style={{ textAlign:'center', fontSize:11, color:'var(--muted)', marginTop:12 }}>Toda la información es pública y visible para todos</div>
         </div>
       </div>
     </div>
@@ -567,43 +528,51 @@ export default function App() {
   const [showLogin,   setShowLogin]   = useState(false)
   const [toast,       setToast]       = useState(null)
   const [loading,     setLoading]     = useState(true)
-  const [syncing,     setSyncing]     = useState(false)
 
   const showToast = useCallback(msg => { setToast(msg); setTimeout(()=>setToast(null),2100) }, [])
 
-  /* LOAD DATA */
+  /* LOAD INITIAL DATA */
   useEffect(()=>{
     ;(async()=>{
       setLoading(true)
-      const [p,b] = await Promise.all([getProjects(), getBids()])
-      setProjects(p); setBids(b)
+      const [p, b] = await Promise.all([getProjects(), getBids()])
+      setProjects(p)
+      setBids(b)
       setLoading(false)
     })()
   },[])
 
   /* REALTIME SUBSCRIPTION */
-  useEffect(()=>{
-    const ch = supabase.channel('obralicit-changes')
-      .on('postgres_changes',{ event:'INSERT', schema:'public', table:'projects' }, payload => {
-        setProjects(prev=>[dbToProjectRT(payload.new),...prev])
+  useEffect(() => {
+    // Función auxiliar para mapear datos crudos de DB a formato frontend
+    const dbToProject = (r) => ({
+      id: r.id, slug: r.slug, nombre: r.nombre, empresa: r.empresa,
+      eInit: r.e_init, eColor: r.e_color, descripcion: r.descripcion,
+      ubicacion: r.ubicacion, fechaCierre: r.fecha_cierre,
+      createdAt: r.created_at?.split('T')[0] ?? r.fecha_cierre,
+      tags: r.tags || [], estado: r.estado, partidas: r.partidas || [], views: r.views || 0
+    })
+    
+    const dbToBid = (r) => ({
+      id: r.id, proyectoId: r.proyecto_id, partidaId: r.partida_id,
+      empresa: r.empresa, contacto: r.contacto, telefono: r.telefono,
+      precio: Number(r.precio), plazo: r.plazo, observaciones: r.observaciones,
+      estado: r.estado, fecha: r.fecha, feedback: r.feedback,
+      rating: r.rating, feedbackTags: r.feedback_tags || []
+    })
+
+    const ch = supabase.channel('realtime-updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, payload => {
+        if (payload.eventType === 'INSERT') setProjects(prev => [dbToProject(payload.new), ...prev])
+        if (payload.eventType === 'UPDATE') setProjects(prev => prev.map(p => p.id === payload.new.id ? dbToProject(payload.new) : p))
       })
-      .on('postgres_changes',{ event:'INSERT', schema:'public', table:'bids' }, payload => {
-        setBids(prev=>[dbToBidRT(payload.new),...prev])
-      })
-      .on('postgres_changes',{ event:'UPDATE', schema:'public', table:'projects' }, payload => {
-        setProjects(prev=>prev.map(p=>p.id===payload.new.id ? dbToProjectRT(payload.new) : p))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bids' }, payload => {
+        setBids(prev => [dbToBid(payload.new), ...prev])
       })
       .subscribe()
-    return ()=>{ supabase.removeChannel(ch) }
-  },[])
 
-  // RT mappers (same logic as supabase.js but inline for realtime events)
-  function dbToProjectRT(r) {
-    return { id:r.id, slug:r.slug, nombre:r.nombre, empresa:r.empresa, eInit:r.e_init, eColor:r.e_color, descripcion:r.descripcion, ubicacion:r.ubicacion, fechaCierre:r.fecha_cierre, createdAt:r.created_at?.split('T')[0]??r.fecha_cierre, tags:r.tags??[], estado:r.estado, partidas:r.partidas??[], views:r.views??0 }
-  }
-  function dbToBidRT(r) {
-    return { id:r.id, proyectoId:r.proyecto_id, partidaId:r.partida_id, empresa:r.empresa, contacto:r.contacto, telefono:r.telefono, precio:Number(r.precio), plazo:r.plazo, observaciones:r.observaciones, estado:r.estado, fecha:r.fecha, feedback:r.feedback, rating:r.rating, feedbackTags:r.feedback_tags??[] }
-  }
+    return () => supabase.removeChannel(ch)
+  }, [])
 
   /* FILTER + SORT */
   const filtered = (() => {
@@ -623,20 +592,48 @@ export default function App() {
   const detailProj  = projects.find(p=>p.id===detailId)
   const tagCount    = t => projects.filter(p=>p.tags.includes(t)).length
   const toggleTag   = t => setActiveTags(prev=>prev.includes(t)?prev.filter(x=>x!==t):[...prev,t])
-  const avgSaving   = bids.length ? (bids.reduce((s,b)=>{ const p=projects.flatMap(pr=>pr.partidas).find(pa=>pa.id===b.partidaId); return s+(p?(p.precioSalida-b.precio)/p.precioSalida*100:0) },0)/bids.length).toFixed(1) : '—'
-  const companies   = [...new Set(bids.map(b=>b.empresa))].length
+  const avgSaving   = bids.length ? (bids.reduce((s,b)=>{ 
+    const p = projects.flatMap(pr=>pr.partidas).find(pa=>pa.id===b.partidaId); 
+    return s + (p ? (p.precioSalida - b.precio) / p.precioSalida * 100 : 0) 
+  }, 0) / bids.length).toFixed(1) : '—'
 
   /* HANDLERS */
   async function handleBid(proyectoId, partidaId, form) {
-    const bid = { id:'B'+uid(), proyectoId, partidaId, empresa:user.empresa, contacto:user.nombre, telefono:form.tel||'', precio:form.precio, plazo:form.plazo, observaciones:form.obs||'', estado:'pendiente', fecha:new Date().toISOString().split('T')[0], feedback:null, rating:null, feedbackTags:[] }
-    await insertBid(bid)  // realtime will update state automatically
-    showToast('Oferta publicada correctamente')
+    const bidData = {
+      id: 'B' + uid(),
+      proyecto_id: proyectoId,
+      partida_id: partidaId,
+      empresa: user.empresa,
+      contacto: user.nombre,
+      telefono: form.tel || '',
+      precio: form.precio,
+      plazo: form.plazo,
+      observaciones: form.obs || '',
+      estado: 'pendiente',
+      fecha: new Date().toISOString().split('T')[0]
+    }
+    const { success } = await insertBid(bidData)
+    if (success) showToast('Oferta publicada correctamente')
   }
 
   async function handleNewProject(data) {
-    const proj = { id:'P'+uid(), slug:slugify(data.nombre), nombre:data.nombre, empresa:user.empresa, eInit:user.empresa.slice(0,2).toUpperCase(), eColor:COLORS[Math.floor(Math.random()*COLORS.length)], descripcion:data.desc, ubicacion:data.ubic||'España', fechaCierre:data.fecha, createdAt:new Date().toISOString().split('T')[0], tags:data.tags, estado:'abierta', partidas:data.partidas, views:1 }
-    await insertProject(proj)
-    showToast('Licitacion publicada para todos')
+    const projData = {
+      id: 'P' + uid(),
+      slug: slugify(data.nombre),
+      nombre: data.nombre,
+      empresa: user.empresa,
+      e_init: user.empresa.slice(0, 2).toUpperCase(),
+      e_color: COLORS[Math.floor(Math.random() * COLORS.length)],
+      descripcion: data.desc,
+      ubicacion: data.ubic || 'España',
+      fecha_cierre: data.fecha,
+      tags: data.tags,
+      estado: 'abierta',
+      partidas: data.partidas,
+      views: 1
+    }
+    const { success } = await insertProject(projData)
+    if (success) showToast('Licitación publicada correctamente')
   }
 
   async function handleOpenDetail(id) {
@@ -644,62 +641,28 @@ export default function App() {
     await incrementViews(id)
   }
 
-  function copyLink(slug) {
-    const url = `${window.location.origin}/?l=${slug}`
-    navigator.clipboard?.writeText?.(url).catch(()=>{})
-    showToast('Enlace copiado')
-  }
-
-  /* LOADING SCREEN */
   if (loading) return (
     <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:14, fontFamily:'Syne,sans-serif', background:'var(--bg)' }}>
       <div style={{ width:48, height:48, background:'var(--ink)', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', fontSize:24, fontWeight:800, color:'var(--accent)', animation:'pulse 1.5s infinite' }}>O</div>
-      <div style={{ fontSize:14, color:'var(--muted)' }}>Cargando ObraLicit…</div>
-    </div>
-  )
-
-  /* SIDEBAR TAG GROUP */
-  const SidebarTagGroup = ({ title, tags }) => (
-    <div style={{ background:'var(--white)', borderRadius:'var(--r)', border:'1px solid var(--border)', boxShadow:'var(--sh)', overflow:'hidden' }}>
-      <div style={{ padding:'11px 14px', borderBottom:'1px solid var(--border)', fontFamily:'Syne,sans-serif', fontSize:11, fontWeight:700, letterSpacing:'.07em', color:'var(--muted)' }}>{title}</div>
-      <div style={{ padding:'12px 14px', display:'flex', flexWrap:'wrap', gap:5 }}>
-        {tags.map(t=>(
-          <button key={t} onClick={()=>toggleTag(t)} style={{ padding:'4px 10px', borderRadius:20, fontSize:12, fontWeight:500, cursor:'pointer', border:`1.5px solid ${activeTags.includes(t)?'var(--accent)':'var(--border)'}`, background:activeTags.includes(t)?'var(--accent)':'transparent', color:activeTags.includes(t)?'#fff':'var(--ink2)', fontFamily:'Barlow,sans-serif', transition:'.15s' }}>
-            {t}<span style={{ fontSize:10, opacity:.45, marginLeft:2 }}>·{tagCount(t)}</span>
-          </button>
-        ))}
-      </div>
+      <div style={{ fontSize:14, color:'var(--muted)' }}>Conectando con Supabase…</div>
     </div>
   )
 
   return (
     <>
-      {/* LIVE STATUS BAR */}
-      <div style={{ background:'var(--ink)', color:'rgba(255,255,255,.6)', fontSize:11, padding:'5px 24px', display:'flex', alignItems:'center', gap:14, fontFamily:'JetBrains Mono,monospace', flexWrap:'wrap' }}>
-        <span style={{ display:'flex', alignItems:'center', gap:5 }}><span style={{ width:6, height:6, borderRadius:'50%', background:'#4ade80', display:'inline-block', animation:'pulse 2s infinite' }}></span> EN DIRECTO</span>
-        {[['Licitaciones abiertas',projects.filter(p=>p.estado==='abierta').length],['Ofertas publicadas',bids.length],['Ahorro medio',`-${avgSaving}%`],['Empresas activas',companies]].map(([l,v])=>(
-          <span key={l}><span style={{ color:'#fff', fontWeight:600 }}>{v}</span> {l}</span>
-        ))}
-      </div>
-
-      {/* NAV */}
       <nav style={{ background:'var(--white)', borderBottom:'1px solid var(--border)', position:'sticky', top:0, zIndex:100, boxShadow:'var(--sh)' }}>
         <div style={{ maxWidth:1300, margin:'0 auto', padding:'0 24px', display:'flex', alignItems:'center', gap:14, height:58 }}>
           <div style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
-            <div style={{ width:36, height:36, background:'var(--ink)', borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'Syne,sans-serif', fontSize:18, fontWeight:800, color:'var(--accent)', flexShrink:0 }}>O</div>
+            <div style={{ width:36, height:36, background:'var(--ink)', borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'Syne,sans-serif', fontSize:18, fontWeight:800, color:'var(--accent)' }}>O</div>
             <div>
               <div style={{ fontFamily:'Syne,sans-serif', fontSize:19, fontWeight:800, lineHeight:1 }}>ObraLicit</div>
-              <div style={{ fontSize:10, color:'var(--muted)', fontWeight:500 }}>Red de contratación transparente</div>
+              <div style={{ fontSize:10, color:'var(--muted)', fontWeight:500 }}>Contratación en tiempo real</div>
             </div>
-          </div>
-          <div style={{ display:'flex', alignItems:'center', gap:5, background:'#e8f5ee', border:'1px solid #b8ddc8', borderRadius:20, padding:'3px 10px', fontSize:11, fontWeight:700, color:'var(--green)' }}>
-            <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--green)', display:'inline-block', animation:'pulse 2s infinite' }}></span>
-            TIEMPO REAL
           </div>
           <div style={{ flex:1, maxWidth:400, position:'relative', marginLeft:8 }}>
             <span style={{ position:'absolute', left:11, top:'50%', transform:'translateY(-50%)', color:'var(--muted)' }}><Ic n="search" s={14}/></span>
             <input style={{ width:'100%', padding:'9px 14px 9px 36px', border:'1.5px solid var(--border)', borderRadius:22, fontFamily:'Barlow,sans-serif', fontSize:14, outline:'none', background:'var(--bg)', color:'var(--ink)' }}
-              placeholder="Buscar obra, empresa, especialidad, zona..."
+              placeholder="Buscar obra, empresa, especialidad..."
               value={search} onChange={e=>setSearch(e.target.value)}
             />
           </div>
@@ -707,138 +670,83 @@ export default function App() {
             {user ? (
               <>
                 <button onClick={()=>setShowNew(true)} style={{ display:'flex', alignItems:'center', gap:6, padding:'8px 18px', borderRadius:22, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, cursor:'pointer', border:'none', background:'var(--accent)', color:'#fff' }}>
-                  <Ic n="plus" s={14}/> Publicar licitación
+                  <Ic n="plus" s={14}/> Publicar
                 </button>
                 <div onClick={()=>setUser(null)} style={{ display:'flex', alignItems:'center', gap:8, padding:'5px 14px 5px 6px', background:'var(--bg)', border:'1.5px solid var(--border)', borderRadius:22, cursor:'pointer', fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600 }}>
                   <div style={{ width:28, height:28, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, color:'#fff', background:user.color }}>{user.initials}</div>
-                  {user.empresa} <Ic n="logout" s={13}/>
+                  {user.empresa}
                 </div>
               </>
             ) : (
-              <>
-                <button onClick={()=>setShowLogin(true)} style={{ display:'flex', alignItems:'center', gap:6, padding:'8px 18px', borderRadius:22, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, cursor:'pointer', background:'transparent', color:'var(--ink2)', border:'1.5px solid var(--border)' }}>Entrar</button>
-                <button onClick={()=>setShowNew(true)} style={{ display:'flex', alignItems:'center', gap:6, padding:'8px 18px', borderRadius:22, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, cursor:'pointer', border:'none', background:'var(--ink)', color:'#fff' }}><Ic n="plus" s={14}/> Publicar</button>
-              </>
+              <button onClick={()=>setShowLogin(true)} style={{ padding:'8px 18px', borderRadius:22, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, cursor:'pointer', background:'var(--ink)', color:'#fff', border:'none' }}>Entrar</button>
             )}
           </div>
         </div>
       </nav>
 
-      {/* PAGE */}
       <div style={{ maxWidth:1300, margin:'0 auto', padding:'28px 24px', display:'grid', gridTemplateColumns:'256px 1fr', gap:22 }}>
-
-        {/* SIDEBAR */}
-        <aside style={{ display:'flex', flexDirection:'column', gap:12, position:'sticky', top:90, alignSelf:'start', maxHeight:'calc(100vh - 110px)', overflowY:'auto' }}>
-          {/* Stats */}
-          <div style={{ background:'var(--white)', borderRadius:'var(--r)', border:'1px solid var(--border)', boxShadow:'var(--sh)', overflow:'hidden' }}>
-            <div style={{ padding:'11px 14px', borderBottom:'1px solid var(--border)', fontFamily:'Syne,sans-serif', fontSize:11, fontWeight:700, letterSpacing:'.07em', color:'var(--muted)', display:'flex', alignItems:'center', gap:6 }}>
-              <Ic n="trend" s={11}/> ESTADÍSTICAS EN VIVO
-            </div>
-            <div style={{ padding:'12px 14px' }}>
-              {[['Licitaciones abiertas',projects.filter(p=>p.estado==='abierta').length],['Total ofertas',bids.length],['Ahorro medio',`-${avgSaving}%`],['Empresas activas',companies],['Total licitaciones',projects.length]].map(([l,v])=>(
-                <div key={l} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'6px 0', borderBottom:'1px solid var(--border)' }}>
-                  <span style={{ fontSize:12, color:'var(--muted)' }}>{l}</span>
-                  <span style={{ fontFamily:'JetBrains Mono,monospace', fontSize:13, fontWeight:500, color:String(v).includes('-')&&v!=='—'?'var(--green)':'' }}>{v}</span>
-                </div>
+        <aside style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          <div style={{ background:'var(--white)', borderRadius:'var(--r)', border:'1px solid var(--border)', padding:14 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:'var(--muted)', marginBottom:10 }}>MÉTRICAS</div>
+            <div style={{ fontSize:20, fontWeight:800, fontFamily:'Syne' }}>{avgSaving}%</div>
+            <div style={{ fontSize:11, color:'var(--muted)' }}>Ahorro medio generado</div>
+          </div>
+          <div style={{ background:'var(--white)', borderRadius:'var(--r)', border:'1px solid var(--border)', overflow:'hidden' }}>
+            <div style={{ padding:'11px 14px', borderBottom:'1px solid var(--border)', fontSize:11, fontWeight:700, color:'var(--muted)' }}>ESPECIALIDADES</div>
+            <div style={{ padding:12, display:'flex', flexWrap:'wrap', gap:5 }}>
+              {SPECIALTY.map(t => (
+                <button key={t} onClick={()=>toggleTag(t)} style={{ padding:'4px 10px', borderRadius:20, fontSize:11, cursor:'pointer', border:`1px solid ${activeTags.includes(t)?'var(--accent)':'var(--border)'}`, background:activeTags.includes(t)?'var(--accent)':'#fff', color:activeTags.includes(t)?'#fff':'#555' }}>
+                  {t} ({tagCount(t)})
+                </button>
               ))}
             </div>
           </div>
-          <SidebarTagGroup title="🏗️ ESPECIALIDAD" tags={SPECIALTY}/>
-          <SidebarTagGroup title="📍 ZONA"          tags={ZONES}/>
-          <SidebarTagGroup title="📋 TIPO DE OBRA"  tags={TYPES}/>
-          {activeTags.length>0 && (
-            <button onClick={()=>setActiveTags([])} style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6, padding:'9px 0', borderRadius:'var(--r-sm)', fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, cursor:'pointer', background:'transparent', color:'var(--ink2)', border:'1.5px solid var(--border)', width:'100%' }}>
-              <Ic n="x" s={13}/> Borrar filtros ({activeTags.length})
-            </button>
-          )}
         </aside>
 
-        {/* FEED */}
         <section>
-          <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom:18, gap:12, flexWrap:'wrap' }}>
+          <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom:18 }}>
             <div>
-              <div style={{ fontFamily:'Syne,sans-serif', fontSize:26, fontWeight:800 }}>Licitaciones abiertas</div>
-              <div style={{ fontSize:13, color:'var(--muted)', marginTop:3 }}>
-                {filtered.length} resultado{filtered.length!==1?'s':''}
-                {activeTags.length>0?` · ${activeTags.join(', ')}`:''}
-                {search?` · "${search}"`:''} ·{' '}
-                <span style={{ color:'var(--green)', fontWeight:600 }}>Precios 100% públicos</span>
-              </div>
+              <div style={{ fontFamily:'Syne,sans-serif', fontSize:26, fontWeight:800 }}>Licitaciones</div>
+              <div style={{ fontSize:13, color:'var(--muted)' }}>{filtered.length} proyectos encontrados</div>
             </div>
-            <div style={{ display:'flex', gap:2, background:'var(--bg)', border:'1px solid var(--border)', borderRadius:22, padding:3 }}>
-              {[['reciente','Recientes'],['populares','Populares'],['cierre','Cierre próximo'],['pujas','Más pujas']].map(([v,l])=>(
-                <button key={v} onClick={()=>setSortBy(v)} style={{ padding:'6px 14px', borderRadius:20, fontSize:12, fontWeight:600, border:'none', background:sortBy===v?'var(--white)':'transparent', color:sortBy===v?'var(--ink)':'var(--muted)', cursor:'pointer', fontFamily:'Syne,sans-serif', boxShadow:sortBy===v?'var(--sh)':'none', transition:'.15s', whiteSpace:'nowrap' }}>{l}</button>
+            <div style={{ display:'flex', gap:5 }}>
+              {['reciente', 'populares', 'cierre'].map(s => (
+                <button key={s} onClick={()=>setSortBy(s)} style={{ padding:'6px 12px', borderRadius:20, fontSize:11, fontWeight:600, border:'none', background:sortBy===s?'var(--ink)':'var(--bg)', color:sortBy===s?'#fff':'#777', cursor:'pointer' }}>{s.toUpperCase()}</button>
               ))}
             </div>
           </div>
 
           <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-            {filtered.length===0 && (
-              <div style={{ textAlign:'center', padding:'60px 20px' }}>
-                <div style={{ fontSize:48, marginBottom:14 }}>🔍</div>
-                <div style={{ fontFamily:'Syne,sans-serif', fontSize:20, fontWeight:700, marginBottom:8 }}>Sin resultados</div>
-                <div style={{ fontSize:13, color:'var(--muted)' }}>Prueba otros filtros o publica la primera licitación.</div>
-              </div>
-            )}
-            {filtered.map((proj,i)=>{
+            {filtered.map(proj => {
               const projBids = bids.filter(b=>b.proyectoId===proj.id)
-              const best     = projBids.length ? projBids.reduce((a,b)=>a.precio<b.precio?a:b) : null
               const totalRef = proj.partidas.reduce((s,p)=>s+p.medicion*p.precioSalida,0)
-              const dl       = daysLeft(proj.fechaCierre)
-              const isFav    = favs.includes(proj.id)
-              const dlStyle  = proj.estado==='cerrada' ? { background:'#f0f0f0',color:'#888' } : dl<=2 ? { background:'var(--red-l)',color:'var(--red)' } : dl<=7 ? { background:'var(--amber-l)',color:'var(--amber)' } : { background:'var(--green-l)',color:'var(--green)' }
-              const dlText   = proj.estado==='cerrada'?'Cerrada':dl<=0?'Vence hoy':`${dl}d restantes`
-
+              const dl = daysLeft(proj.fechaCierre)
               return (
-                <article key={proj.id} style={{ background:'var(--white)', borderRadius:'var(--r-lg)', border:'1px solid var(--border)', boxShadow:'var(--sh)', overflow:'hidden', transition:'.2s', animation:`fadeUp .3s ease ${i*0.05}s both`, cursor:'default' }}>
-                  <div style={{ padding:'20px 22px 14px' }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:11, flexWrap:'wrap' }}>
-                      <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, fontWeight:600, color:'var(--ink2)' }}>
-                        <div style={{ width:22, height:22, borderRadius:5, display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, fontWeight:800, color:'#fff', fontFamily:'Syne,sans-serif', background:proj.eColor, flexShrink:0 }}>{proj.eInit}</div>
-                        {proj.empresa}
-                      </div>
-                      <span style={{ width:3, height:3, borderRadius:'50%', background:'var(--border2)' }}/>
-                      <span style={{ fontSize:11, color:'var(--muted)' }}>{timeAgo(proj.createdAt)}</span>
-                      <span style={{ width:3, height:3, borderRadius:'50%', background:'var(--border2)' }}/>
-                      <span style={{ fontSize:11, color:'var(--muted)', display:'flex', alignItems:'center', gap:3 }}><Ic n="map" s={11}/>{proj.ubicacion}</span>
-                      {proj.tags.includes('Urgente') && <Tag t="Urgente"/>}
+                <article key={proj.id} style={{ background:'var(--white)', borderRadius:'var(--r-lg)', border:'1px solid var(--border)', boxShadow:'var(--sh)', overflow:'hidden' }}>
+                  <div style={{ padding:22 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+                      <div style={{ width:22, height:22, borderRadius:5, background:proj.eColor, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:9, fontWeight:800 }}>{proj.eInit}</div>
+                      <span style={{ fontSize:12, fontWeight:600 }}>{proj.empresa}</span>
+                      <span style={{ fontSize:11, color:'var(--muted)' }}>• {timeAgo(proj.createdAt)}</span>
                     </div>
-                    <div onClick={()=>handleOpenDetail(proj.id)} style={{ fontFamily:'Syne,sans-serif', fontSize:18, fontWeight:700, lineHeight:1.25, marginBottom:8, color:'var(--ink)', cursor:'pointer' }}
-                      onMouseEnter={e=>e.target.style.color='var(--accent)'} onMouseLeave={e=>e.target.style.color='var(--ink)'}>
-                      {proj.nombre}
-                    </div>
-                    <div style={{ fontSize:13, color:'var(--ink2)', lineHeight:1.65, marginBottom:13 }}>{proj.descripcion}</div>
-                    <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:14 }}>
-                      {proj.tags.filter(t=>t!=='Urgente').map(t=><Tag key={t} t={t} onClick={()=>toggleTag(t)}/>)}
+                    <div onClick={()=>handleOpenDetail(proj.id)} style={{ fontSize:19, fontWeight:800, fontFamily:'Syne', cursor:'pointer', marginBottom:6 }}>{proj.nombre}</div>
+                    <div style={{ fontSize:13, color:'var(--ink2)', lineHeight:1.5, marginBottom:12 }}>{proj.descripcion}</div>
+                    <div style={{ display:'flex', gap:6 }}>
+                      {proj.tags.map(t => <Tag key={t} t={t} onClick={()=>toggleTag(t)}/>)}
                     </div>
                   </div>
-                  {/* Stats bar */}
-                  <div style={{ display:'flex', borderTop:'1px solid var(--border)', borderBottom:'1px solid var(--border)', background:'var(--bg)' }}>
-                    {[['PARTIDAS',proj.partidas.length,''],['PRESUP. REF.',fmt(totalRef),'var(--accent)'],['OFERTAS',projBids.length,''],best?['MEJOR OFERTA',fmt(best.precio),'var(--green)']:null,['VISITAS',proj.views,'']].filter(Boolean).map(([l,v,c],idx,arr)=>(
-                      <div key={l} style={{ flex:1, padding:'10px 14px', borderRight:idx<arr.length-1?'1px solid var(--border)':'none' }}>
-                        <div style={{ fontFamily:'JetBrains Mono,monospace', fontSize:14, fontWeight:500, color:c||'var(--ink)' }}>{v}</div>
-                        <div style={{ fontSize:10, color:'var(--muted)', fontWeight:700, letterSpacing:'.04em', marginTop:2 }}>{l}</div>
+                  <div style={{ display:'flex', background:'var(--bg)', borderTop:'1px solid var(--border)', padding:'12px 22px', alignItems:'center', justifyContent:'space-between' }}>
+                    <div style={{ display:'flex', gap:20 }}>
+                      <div>
+                        <div style={{ fontSize:10, color:'var(--muted)', fontWeight:700 }}>PRESUPUESTO</div>
+                        <div style={{ fontSize:14, fontWeight:700 }}>{fmt(totalRef)}</div>
                       </div>
-                    ))}
-                  </div>
-                  {/* Actions */}
-                  <div style={{ padding:'12px 22px', display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                    <button onClick={()=>handleOpenDetail(proj.id)} style={{ display:'flex', alignItems:'center', gap:6, padding:'8px 16px', borderRadius:8, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, cursor:'pointer', border:'none', background:'var(--ink)', color:'#fff' }}>
-                      <Ic n="euro" s={14}/> Ver y pujar
-                    </button>
-                    <button onClick={()=>handleOpenDetail(proj.id)} style={{ display:'flex', alignItems:'center', gap:6, padding:'8px 16px', borderRadius:8, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, cursor:'pointer', background:'transparent', color:'var(--ink2)', border:'1.5px solid var(--border)' }}>
-                      Ver detalle →
-                    </button>
-                    <button onClick={()=>copyLink(proj.slug)} style={{ display:'flex', alignItems:'center', gap:5, padding:'8px 12px', borderRadius:8, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, cursor:'pointer', background:'transparent', color:'var(--muted)', border:'1.5px solid var(--border)' }} title="Copiar enlace compartible">
-                      <Ic n="share" s={14}/>
-                    </button>
-                    <button onClick={()=>setFavs(f=>f.includes(proj.id)?f.filter(x=>x!==proj.id):[...f,proj.id])}
-                      style={{ display:'flex', alignItems:'center', gap:5, padding:'8px 13px', borderRadius:8, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, cursor:'pointer', background:isFav?'var(--accent-l)':'transparent', color:isFav?'var(--accent)':'var(--muted)', border:`1.5px solid ${isFav?'var(--accent)':'var(--border)'}` }}>
-                      {isFav?'Guardada':'Guardar'}
-                    </button>
-                    <div style={{ marginLeft:'auto', fontFamily:'Syne,sans-serif', fontSize:11, fontWeight:700, padding:'6px 12px', borderRadius:8, display:'flex', alignItems:'center', gap:4, ...dlStyle }}>
-                      <Ic n="clock" s={11}/>{dlText}
+                      <div>
+                        <div style={{ fontSize:10, color:'var(--muted)', fontWeight:700 }}>OFERTAS</div>
+                        <div style={{ fontSize:14, fontWeight:700 }}>{projBids.length}</div>
+                      </div>
                     </div>
+                    <button onClick={()=>handleOpenDetail(proj.id)} style={{ padding:'8px 20px', borderRadius:8, background:'var(--ink)', color:'#fff', border:'none', fontSize:13, fontWeight:700, cursor:'pointer' }}>Ver detalles →</button>
                   </div>
                 </article>
               )
@@ -847,7 +755,6 @@ export default function App() {
         </section>
       </div>
 
-      {/* MODALS & PANELS */}
       {detailProj && <DetailPanel proj={detailProj} bids={bids} user={user} onClose={()=>setDetailId(null)} onBid={handleBid} onLogin={()=>setShowLogin(true)}/>}
       {showNew    && <NewProjectModal user={user} onClose={()=>setShowNew(false)} onSubmit={handleNewProject} onLogin={()=>{setShowNew(false);setShowLogin(true)}}/>}
       {showLogin  && <LoginModal onClose={()=>setShowLogin(false)} onLogin={u=>{setUser(u);setShowLogin(false);showToast('Bienvenido, ' + u.nombre)}}/>}
