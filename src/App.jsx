@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { supabase, ADMIN_USER_ID } from './lib/supabase'
+import { supabase } from './lib/supabase'
+
+// UUID del usuario administrador — ve todos los precios y conversaciones
+const ADMIN_USER_ID = '4ab86804-df35-49c6-9919-2480ae898863'
 
 // ─── CONSTANTES ───────────────────────────────────────────────────────────────
 const SPECIALTY = ['Micropilotes','Pilotes CPI','Inyecciones','Pantallas','Muros','Mejora terreno','Anclajes','Sondeos','Cimentaciones especiales']
