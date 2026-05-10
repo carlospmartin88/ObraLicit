@@ -638,11 +638,71 @@ function NewProjectModal({ company, session, onClose, onSubmit }) {
 }
 
 // ─── PANEL PERFIL ─────────────────────────────────────────────────────────────
-function ProfilePanel({ user, company, projects, bids, onClose, onOpenDetail, onNewMsg }) {
+const ROLES_DISPONIBLES = ['constructora','subcontrata','especialista','promotora','ingeniería','laboratorio','suministrador']
+
+function ProfilePanel({ user, company, projects, bids, onClose, onOpenDetail, onNewMsg, onCompanyUpdate }) {
   const misProyectos = projects.filter(p=>p.user_id===user.id)
   const misPujas     = bids.filter(b=>b.user_id===user.id)
   const adjudicadas  = misPujas.filter(b=>b.estado==='adjudicada')
-  const [tab, setTab] = useState('proyectos')
+  const [tab, setTab]     = useState('proyectos')
+
+  // Estado edición perfil
+  const [editNombre,   setEditNombre]   = useState(company?.name||'')
+  const [editTel,      setEditTel]      = useState(company?.telefono||'')
+  const [editRoles,    setEditRoles]    = useState(
+    company?.role ? company.role.split(',').map(r=>r.trim()) : ['subcontrata']
+  )
+  const [editEmail,    setEditEmail]    = useState(user?.email||'')
+  const [editPass,     setEditPass]     = useState('')
+  const [editPassConf, setEditPassConf] = useState('')
+  const [saving,       setSaving]       = useState(false)
+  const [saveMsg,      setSaveMsg]      = useState({ text:'', ok:false })
+
+  function toggleRol(r) {
+    setEditRoles(prev =>
+      prev.includes(r)
+        ? prev.length > 1 ? prev.filter(x=>x!==r) : prev  // mínimo 1 rol
+        : [...prev, r]
+    )
+  }
+
+  async function guardarPerfil() {
+    setSaving(true)
+    setSaveMsg({ text:'', ok:false })
+    try {
+      // Actualizar datos de empresa en companies
+      const { error: ce } = await supabase.from('companies')
+        .update({ name: editNombre.trim(), telefono: editTel.trim(), role: editRoles.join(',') })
+        .eq('id', user.id)
+      if (ce) throw new Error('Error al guardar: ' + ce.message)
+
+      // Actualizar email si cambió
+      if (editEmail.trim() && editEmail.trim() !== user.email) {
+        const { error: ee } = await supabase.auth.updateUser({ email: editEmail.trim() })
+        if (ee) throw new Error('Error al cambiar email: ' + ee.message)
+      }
+
+      // Actualizar contraseña si se rellenó
+      if (editPass) {
+        if (editPass !== editPassConf) throw new Error('Las contraseñas no coinciden')
+        if (editPass.length < 6) throw new Error('La contraseña debe tener al menos 6 caracteres')
+        const { error: pe } = await supabase.auth.updateUser({ password: editPass })
+        if (pe) throw new Error('Error al cambiar contraseña: ' + pe.message)
+        setEditPass(''); setEditPassConf('')
+      }
+
+      setSaveMsg({ text: 'Perfil actualizado correctamente', ok: true })
+      // Notificar al padre para refrescar company
+      if (onCompanyUpdate) onCompanyUpdate({ name:editNombre.trim(), telefono:editTel.trim(), role:editRoles.join(',') })
+    } catch(e) {
+      setSaveMsg({ text: e.message, ok: false })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const inp = { width:'100%', padding:'10px 12px', border:'1.5px solid #ddd', borderRadius:6, fontSize:14, outline:'none', fontFamily:'Barlow,sans-serif', boxSizing:'border-box' }
+  const lbl = { display:'block', fontSize:11, fontWeight:700, letterSpacing:'.06em', color:'#888', marginBottom:5, fontFamily:'Syne,sans-serif' }
 
   return (
     <div style={{ position:'fixed', inset:0, zIndex:200, background:'rgba(0,0,0,.5)', backdropFilter:'blur(5px)', display:'flex' }} onClick={e=>{ if(e.target===e.currentTarget) onClose() }}>
@@ -664,18 +724,17 @@ function ProfilePanel({ user, company, projects, bids, onClose, onOpenDetail, on
               <div style={{ fontSize:12, color:'rgba(255,255,255,.4)', marginTop:2 }}>{user.email}</div>
             </div>
           </div>
-          {/* Stats rápidas */}
           <div style={{ display:'flex', gap:20, marginTop:18, flexWrap:'wrap' }}>
-            {[['Proyectos publicados',misProyectos.length],['Pujas enviadas',misPujas.length],['Contratos ganados',adjudicadas.length]].map(([l,v])=>(
+            {[['Proyectos',misProyectos.length],['Pujas enviadas',misPujas.length],['Contratos ganados',adjudicadas.length]].map(([l,v])=>(
               <div key={l}><div style={{ fontSize:10, color:'rgba(255,255,255,.35)', fontWeight:700 }}>{l.toUpperCase()}</div><div style={{ fontFamily:'JetBrains Mono,monospace', fontSize:18, fontWeight:700, color:'#fff', marginTop:2 }}>{v}</div></div>
             ))}
           </div>
         </div>
 
         {/* TABS */}
-        <div style={{ display:'flex', borderBottom:'1px solid #eee', background:'#f8f7f4' }}>
-          {[['proyectos','Proyectos'],['pujas','Mis pujas'],['empresas','Directorio']].map(([k,l])=>(
-            <button key={k} onClick={()=>setTab(k)} style={{ flex:1, padding:'14px', border:'none', background:'transparent', fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700, cursor:'pointer', color:tab===k?'#e85d04':'#888', borderBottom:tab===k?'2px solid #e85d04':'2px solid transparent', transition:'.15s' }}>{l}</button>
+        <div style={{ display:'flex', borderBottom:'1px solid #eee', background:'#f8f7f4', overflowX:'auto' }}>
+          {[['proyectos','Proyectos'],['pujas','Mis pujas'],['empresas','Directorio'],['perfil','Mi perfil']].map(([k,l])=>(
+            <button key={k} onClick={()=>setTab(k)} style={{ flex:1, minWidth:90, padding:'14px 10px', border:'none', background:'transparent', fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700, cursor:'pointer', color:tab===k?'#e85d04':'#888', borderBottom:tab===k?'2px solid #e85d04':'2px solid transparent', transition:'.15s', whiteSpace:'nowrap' }}>{l}</button>
           ))}
         </div>
 
@@ -721,6 +780,71 @@ function ProfilePanel({ user, company, projects, bids, onClose, onOpenDetail, on
           )}
           {tab==='empresas' && (
             <EmpresasDirectorio currentUser={user} onNewMsg={onNewMsg}/>
+          )}
+
+          {tab==='perfil' && (
+            <div>
+              <div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700, color:'#888', marginBottom:18 }}>DATOS DE LA EMPRESA</div>
+
+              <div style={{ marginBottom:14 }}>
+                <label style={lbl}>NOMBRE DE LA EMPRESA</label>
+                <input style={inp} value={editNombre} onChange={e=>setEditNombre(e.target.value)} placeholder="Nombre de tu empresa"/>
+              </div>
+
+              <div style={{ marginBottom:14 }}>
+                <label style={lbl}>TELÉFONO DE CONTACTO</label>
+                <input style={inp} type="tel" value={editTel} onChange={e=>setEditTel(e.target.value)} placeholder="6XX XXX XXX"/>
+              </div>
+
+              <div style={{ marginBottom:20 }}>
+                <label style={lbl}>ROLES DE LA EMPRESA (puedes tener varios)</label>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginTop:4 }}>
+                  {ROLES_DISPONIBLES.map(r=>(
+                    <button key={r} onClick={()=>toggleRol(r)} style={{
+                      padding:'7px 14px', borderRadius:20, fontSize:12, fontWeight:600,
+                      cursor:'pointer', fontFamily:'Barlow,sans-serif', transition:'.15s',
+                      border: editRoles.includes(r) ? '2px solid #e85d04' : '2px solid #eee',
+                      background: editRoles.includes(r) ? '#fff2ec' : 'transparent',
+                      color: editRoles.includes(r) ? '#e85d04' : '#888'
+                    }}>
+                      {editRoles.includes(r) ? '✓ ' : '+ '}{r}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ fontSize:11, color:'#888', marginTop:6 }}>Roles activos: <strong>{editRoles.join(', ')}</strong></div>
+              </div>
+
+              <div style={{ height:1, background:'#eee', margin:'20px 0' }}/>
+              <div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700, color:'#888', marginBottom:18 }}>ACCESO Y SEGURIDAD</div>
+
+              <div style={{ marginBottom:14 }}>
+                <label style={lbl}>EMAIL DE ACCESO</label>
+                <input style={inp} type="email" value={editEmail} onChange={e=>setEditEmail(e.target.value)} placeholder="tu@empresa.com"/>
+                <div style={{ fontSize:11, color:'#888', marginTop:4 }}>Si cambias el email recibirás un enlace de confirmación</div>
+              </div>
+
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:14 }}>
+                <div>
+                  <label style={lbl}>NUEVA CONTRASEÑA</label>
+                  <input style={inp} type="password" value={editPass} onChange={e=>setEditPass(e.target.value)} placeholder="Mínimo 6 caracteres"/>
+                </div>
+                <div>
+                  <label style={lbl}>CONFIRMAR CONTRASEÑA</label>
+                  <input style={inp} type="password" value={editPassConf} onChange={e=>setEditPassConf(e.target.value)} placeholder="Repite la contraseña"/>
+                </div>
+              </div>
+              <div style={{ fontSize:11, color:'#888', marginBottom:20 }}>Deja en blanco si no quieres cambiar la contraseña</div>
+
+              {saveMsg.text && (
+                <div style={{ padding:'10px 14px', background:saveMsg.ok?'#e5f4ec':'#fdecea', color:saveMsg.ok?'#1a6b3a':'#c0392b', borderRadius:6, fontSize:13, marginBottom:16, lineHeight:1.5 }}>
+                  {saveMsg.text}
+                </div>
+              )}
+
+              <button onClick={guardarPerfil} disabled={saving} style={{ background:'#e85d04', color:'#fff', border:'none', padding:'12px 28px', borderRadius:8, fontFamily:'Syne,sans-serif', fontSize:14, fontWeight:700, cursor:'pointer', opacity:saving?.6:1 }}>
+                {saving ? 'Guardando...' : 'Guardar cambios'}
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -1287,7 +1411,7 @@ export default function App() {
       {/* PANELES Y MODALES */}
       {detailProj && <DetailPanel proj={detailProj} bids={bids} user={session?.user} company={company} onClose={()=>setDetailId(null)} onBid={handleBid}/>}
       {showNew    && <NewProjectModal company={company} session={session} onClose={()=>setShowNew(false)} onSubmit={handleNewProject}/>}
-      {showProfile && <ProfilePanel user={session.user} company={company} projects={projects} bids={bids} onClose={()=>setShowProfile(false)} onOpenDetail={handleOpenDetail} onNewMsg={handleNewMsg}/>}
+      {showProfile && <ProfilePanel user={session.user} company={company} projects={projects} bids={bids} onClose={()=>setShowProfile(false)} onOpenDetail={handleOpenDetail} onNewMsg={handleNewMsg} onCompanyUpdate={updates=>setCompany(prev=>({...prev,...updates}))}/>}
       {showMsgs   && <MessagesPanel user={session.user} company={company} onClose={()=>setShowMsgs(false)} initialTarget={msgTarget}/>}
       {toast      && <Toast msg={toast}/>}
     </div>
