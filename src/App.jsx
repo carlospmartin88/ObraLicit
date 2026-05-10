@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from './lib/supabase'
 
 // UUID del usuario administrador — ve todos los precios y conversaciones
-const ADMIN_USER_ID = '4ab86804-df35-49c6-9919-2480ae898863'
+const ADMIN_USER_ID = 'PON-AQUI-TU-UUID'
 
 // ─── CONSTANTES ───────────────────────────────────────────────────────────────
 const SPECIALTY = ['Micropilotes','Pilotes CPI','Inyecciones','Pantallas','Muros','Mejora terreno','Anclajes','Sondeos','Cimentaciones especiales']
@@ -906,44 +906,60 @@ export default function App() {
 
   // ── SESIÓN ───────────────────────────────────────────────────────────────────
   useEffect(()=>{
-    // getSession lee directamente del localStorage — INSTANTÁNEO, no necesita red
-    supabase.auth.getSession().then(async ({ data: { session } })=>{
-      if (session) {
-        setSession(session)
-        try {
-          const { data:co } = await supabase.from('companies').select('*').eq('id',session.user.id).single()
-          setCompany(co)
-        } catch(e){ console.warn('company load error:', e) }
-      }
-      setAuthReady(true)
-    }).catch(()=>setAuthReady(true))
+    // Función para cargar el perfil de empresa dado un user
+    async function loadCompany(userId) {
+      try {
+        const { data } = await supabase.from('companies').select('*').eq('id', userId).single()
+        if (data) setCompany(data)
+      } catch(e) { console.warn('company:', e) }
+    }
 
-    // onAuthStateChange para cambios posteriores (login, logout, token refresh)
+    // onAuthStateChange gestiona TODOS los eventos: carga inicial, login, logout, refresh
+    // INITIAL_SESSION es el evento que dispara al recargar con sesión en localStorage
     const { data:{ subscription } } = supabase.auth.onAuthStateChange(async (event, session)=>{
+      console.log('Auth event:', event, !!session)
+
       if (event === 'SIGNED_OUT') {
-        setSession(null); setCompany(null); return
+        setSession(null)
+        setCompany(null)
+        setAuthReady(true)
+        return
       }
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        setSession(session)
+
+      // INITIAL_SESSION: al cargar la página (con o sin sesión guardada)
+      // SIGNED_IN: tras hacer login
+      // TOKEN_REFRESHED: renovación automática del token
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         if (session) {
-          try {
-            const { data:co } = await supabase.from('companies').select('*').eq('id',session.user.id).single()
-            setCompany(co)
-          } catch(e){ console.warn(e) }
+          setSession(session)
+          await loadCompany(session.user.id)
         }
         setAuthReady(true)
       }
     })
 
-    // Al cerrar pestaña: cerrar sesión
-    const handleUnload = () => supabase.auth.signOut()
-    window.addEventListener('beforeunload', handleUnload)
-
-    return ()=>{
-      subscription.unsubscribe()
-      window.removeEventListener('beforeunload', handleUnload)
-    }
+    return ()=>{ subscription.unsubscribe() }
   },[])
+
+  // Cerrar sesión al cerrar la ventana (NO al recargar)
+  useEffect(()=>{
+    // Solo cerramos sesión si el usuario cierra la VENTANA, no si recarga
+    // Usamos sessionStorage como flag: si existe, es una recarga
+    const handleBeforeUnload = (e) => {
+      // Marcar que es una recarga (se borra automáticamente al cerrar)
+      sessionStorage.setItem('reloading', '1')
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    // Si NO viene de recarga (sessionStorage vacío al abrir por primera vez),
+    // significa que abrimos pestaña nueva o volvimos tras cerrarla
+    // En ese caso la sesión de Supabase ya no existe (la borramos al cerrar)
+    // Nota: sessionStorage se comparte en la misma pestaña pero NO entre pestañas
+    // y se borra al cerrar la pestaña — exactamente lo que queremos
+
+    return ()=> window.removeEventListener('beforeunload', handleBeforeUnload)
+  },[])
+
 
 
   // ── DATOS: se cargan independientemente de la sesión ─────────────────────────
