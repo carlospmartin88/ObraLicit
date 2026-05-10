@@ -5,12 +5,10 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
-    persistSession:      true,
-    storage:             window.localStorage,
-    autoRefreshToken:    true,
-    detectSessionInUrl:  false,
+    persistSession:     true,
+    autoRefreshToken:   true,
+    detectSessionInUrl: false,
   }
 })
 
-// ID del usuario administrador (ve todo)
-export const ADMIN_USER_ID = 4ab86804-df35-49c6-9919-2480ae898863
+export const ADMIN_USER_ID = '4ab86804-df35-49c6-9919-2480ae898863'
