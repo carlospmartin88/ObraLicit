@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { supabase } from './lib/supabase'
+import { supabase, ADMIN_USER_ID } from './lib/supabase'
 
 // ─── CONSTANTES ───────────────────────────────────────────────────────────────
 const SPECIALTY = ['Micropilotes','Pilotes CPI','Inyecciones','Pantallas','Muros','Mejora terreno','Anclajes','Sondeos','Cimentaciones especiales']
@@ -103,8 +103,13 @@ function FileUploader({ archivos, onChange, maxSize, label }) {
       const path = `${uid()}-${file.name.replace(/[^a-z0-9.\-_]/gi,'_')}`
       const { error } = await supabase.storage.from('obralicit-files').upload(path, file)
       if (error) { alert('Error subiendo ' + file.name + ': ' + error.message); continue }
-      const { data: { publicUrl } } = supabase.storage.from('obralicit-files').getPublicUrl(path)
-      nuevos.push({ nombre: file.name, path, url: publicUrl, size: file.size, tipo: file.type })
+      // Bucket privado: generar URL firmada válida 1 año
+      const { data: signedData, error: signErr } = await supabase.storage
+        .from('obralicit-files')
+        .createSignedUrl(path, 60 * 60 * 24 * 365)
+      const url = signedData?.signedUrl || ''
+      if (signErr) console.warn('Error generando URL:', signErr)
+      nuevos.push({ nombre: file.name, path, url, size: file.size, tipo: file.type })
     }
     if (nuevos.length) onChange([...archivos, ...nuevos])
     e.target.value = ''
@@ -353,7 +358,8 @@ function DetailPanel({ proj, bids, user, company, onClose, onBid }) {
   const totalRef  = (proj.partidas||[]).reduce((s,p)=>s+p.medicion*p.precioSalida,0)
   const dl        = daysLeft(proj.fecha_cierre)
   const projBids  = bids.filter(b=>b.proyecto_id===proj.id && !b.expirada)
-  const esConstructora = company?.role === 'constructora'
+  const esAdmin        = user?.id === ADMIN_USER_ID
+  const esConstructora = company?.role === 'constructora' || esAdmin
 
   function handleCopy() {
     navigator.clipboard?.writeText?.(`${window.location.origin}/?l=${proj.slug}`)
@@ -648,7 +654,10 @@ function ProfilePanel({ user, company, projects, bids, onClose, onOpenDetail, on
             </div>
             <div>
               <div style={{ fontFamily:'Syne,sans-serif', fontSize:22, fontWeight:800 }}>{company?.name}</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,.5)', marginTop:3 }}>{company?.role} — CIF: {company?.cif||'No registrado'}</div>
+              <div style={{ fontSize:12, color:'rgba(255,255,255,.5)', marginTop:3 }}>
+                {user.id === ADMIN_USER_ID && <span style={{ background:'#e85d04', color:'#fff', padding:'1px 8px', borderRadius:4, fontSize:10, fontWeight:700, marginRight:6 }}>ADMIN</span>}
+                {company?.role} — CIF: {company?.cif||'No registrado'}
+              </div>
               <div style={{ fontSize:12, color:'rgba(255,255,255,.4)', marginTop:2 }}>{user.email}</div>
             </div>
           </div>
@@ -760,7 +769,11 @@ function MessagesPanel({ user, company, onClose, initialTarget }) {
   },[])
 
   async function loadMessages() {
-    const { data } = await supabase.from('messages').select('*').or(`from_user_id.eq.${user.id},to_user_id.eq.${user.id}`).order('created_at', { ascending:false })
+    const esAdmin = user.id === ADMIN_USER_ID
+    const query = esAdmin
+      ? supabase.from('messages').select('*').order('created_at', { ascending:false })
+      : supabase.from('messages').select('*').or(`from_user_id.eq.${user.id},to_user_id.eq.${user.id}`).order('created_at', { ascending:false })
+    const { data } = await query
     if (data) setMensajes(data)
   }
 
@@ -890,28 +903,45 @@ export default function App() {
 
   // ── SESIÓN ───────────────────────────────────────────────────────────────────
   useEffect(()=>{
-    // 1. Intentar recuperar sesión de la caché local de Supabase (instantáneo)
-    // 2. Si no hay caché, esperar máx 3s a Supabase
-    let resolved = false
-    const safetyTimer = setTimeout(()=>{ if(!resolved){ resolved=true; setAuthReady(true) } }, 3000)
-
-    const { data:{ subscription } } = supabase.auth.onAuthStateChange(async (_e, session)=>{
-      if (!resolved) { resolved=true; clearTimeout(safetyTimer) }
-      setSession(session)
+    // getSession lee directamente del localStorage — INSTANTÁNEO, no necesita red
+    supabase.auth.getSession().then(async ({ data: { session } })=>{
       if (session) {
+        setSession(session)
         try {
           const { data:co } = await supabase.from('companies').select('*').eq('id',session.user.id).single()
           setCompany(co)
-        } catch(e){ console.warn(e) }
-      } else { setCompany(null) }
+        } catch(e){ console.warn('company load error:', e) }
+      }
       setAuthReady(true)
+    }).catch(()=>setAuthReady(true))
+
+    // onAuthStateChange para cambios posteriores (login, logout, token refresh)
+    const { data:{ subscription } } = supabase.auth.onAuthStateChange(async (event, session)=>{
+      if (event === 'SIGNED_OUT') {
+        setSession(null); setCompany(null); return
+      }
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        setSession(session)
+        if (session) {
+          try {
+            const { data:co } = await supabase.from('companies').select('*').eq('id',session.user.id).single()
+            setCompany(co)
+          } catch(e){ console.warn(e) }
+        }
+        setAuthReady(true)
+      }
     })
 
-    // getSession dispara onAuthStateChange internamente — no necesitamos manejarlo por separado
-    supabase.auth.getSession().catch(()=>{ if(!resolved){ resolved=true; clearTimeout(safetyTimer); setAuthReady(true) } })
+    // Al cerrar pestaña: cerrar sesión
+    const handleUnload = () => supabase.auth.signOut()
+    window.addEventListener('beforeunload', handleUnload)
 
-    return ()=>{ clearTimeout(safetyTimer); subscription.unsubscribe() }
+    return ()=>{
+      subscription.unsubscribe()
+      window.removeEventListener('beforeunload', handleUnload)
+    }
   },[])
+
 
   // ── DATOS: se cargan independientemente de la sesión ─────────────────────────
   useEffect(()=>{
