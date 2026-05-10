@@ -906,32 +906,24 @@ export default function App() {
 
   // ── SESIÓN ───────────────────────────────────────────────────────────────────
   useEffect(()=>{
-    // Función para cargar el perfil de empresa dado un user
-    async function loadCompany(userId) {
-      try {
-        const { data } = await supabase.from('companies').select('*').eq('id', userId).single()
-        if (data) setCompany(data)
-      } catch(e) { console.warn('company:', e) }
-    }
-
-    // onAuthStateChange gestiona TODOS los eventos: carga inicial, login, logout, refresh
-    // INITIAL_SESSION es el evento que dispara al recargar con sesión en localStorage
-    const { data:{ subscription } } = supabase.auth.onAuthStateChange(async (event, session)=>{
-      console.log('Auth event:', event, !!session)
-
+    // REGLA CLAVE: el callback de onAuthStateChange NO puede ser async
+    // porque Supabase no espera la promesa — usar .then() en su lugar
+    const { data:{ subscription } } = supabase.auth.onAuthStateChange((event, session)=>{
       if (event === 'SIGNED_OUT') {
         setSession(null)
         setCompany(null)
         setAuthReady(true)
         return
       }
-
-      // Cualquier otro evento con sesión activa
+      // Para cualquier evento con sesión (INITIAL_SESSION, SIGNED_IN, TOKEN_REFRESHED)
       if (session) {
         setSession(session)
-        await loadCompany(session.user.id)
+        // Cargar empresa en paralelo, SIN bloquear el setAuthReady
+        supabase.from('companies').select('*').eq('id', session.user.id).single()
+          .then(({ data }) => { if (data) setCompany(data) })
+          .catch(e => console.warn('company:', e))
       }
-      // SIEMPRE marcar auth como listo, pase lo que pase
+      // Marcar auth listo INMEDIATAMENTE, sin esperar a loadCompany
       setAuthReady(true)
     })
 
