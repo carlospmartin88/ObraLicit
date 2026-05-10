@@ -13,4 +13,4 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
 })
 
 // ID del usuario administrador (ve todo)
-export const ADMIN_USER_ID = 'PON-AQUI-TU-UUID-DE-SUPABASE'
+export const ADMIN_USER_ID = '4ab86804-df35-49c6-9919-2480ae898863'
