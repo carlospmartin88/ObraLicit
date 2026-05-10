@@ -926,16 +926,13 @@ export default function App() {
         return
       }
 
-      // INITIAL_SESSION: al cargar la página (con o sin sesión guardada)
-      // SIGNED_IN: tras hacer login
-      // TOKEN_REFRESHED: renovación automática del token
-      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        if (session) {
-          setSession(session)
-          await loadCompany(session.user.id)
-        }
-        setAuthReady(true)
+      // Cualquier otro evento con sesión activa
+      if (session) {
+        setSession(session)
+        await loadCompany(session.user.id)
       }
+      // SIEMPRE marcar auth como listo, pase lo que pase
+      setAuthReady(true)
     })
 
     return ()=>{ subscription.unsubscribe() }
@@ -969,8 +966,8 @@ export default function App() {
 
   async function loadData() {
     try {
-      // Primero marcar pujas expiradas
-      await supabase.rpc('marcar_pujas_expiradas').catch(()=>{})
+      // Marcar pujas expiradas
+      try { await supabase.rpc('marcar_pujas_expiradas') } catch(_){}
       const [{ data:p },{ data:b }] = await Promise.all([
         supabase.from('projects').select('*').order('created_at',{ ascending:false }),
         supabase.from('bids').select('*').order('fecha',{ ascending:false })
