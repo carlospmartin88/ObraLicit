@@ -538,39 +538,116 @@ function DetailPanel({ proj, bids, user, company, onClose, onBid }) {
 }
 
 // ─── PLANTILLA EXCEL ─────────────────────────────────────────────────────────
-function descargarPlantillaExcel() {
-  // Crear CSV con estructura de partidas para importar
-  const header = 'CODIGO,DESCRIPCION,UNIDAD,MEDICION,PRECIO_SALIDA_EUR'
-  const ejemplos = [
-    'CIM-001,Micropilote Ø168mm L=12m c/camisa perdida,ud,48,850',
-    'CIM-002,Muro pantalla e=60cm H=8m,m2,320,210',
-    'INY-001,Inyeccion compactacion terreno granular,m,560,38',
+// ─── AUTOETIQUETADO IA ───────────────────────────────────────────────────────
+async function autoEtiquetar({ nombre, desc, partidas }) {
+  // Mapa de palabras clave → tags
+  const texto = [nombre, desc, ...partidas.map(p=>p.descripcion)].join(' ').toLowerCase()
+  const detectados = new Set()
+
+  const reglas = [
+    // Especialidades
+    { tags:['Micropilotes'],               keys:['micropilote','autoperforante','n80','tubex'] },
+    { tags:['Pilotes CPI'],                keys:['pilote','cpi','cfa','φ','ø600','ø450','ø350'] },
+    { tags:['Inyecciones'],                keys:['inyeccion','inyección','grouting','compactacion'] },
+    { tags:['Pantallas'],                  keys:['pantalla','muro pantalla','bentonit','lodo'] },
+    { tags:['Muros'],                      keys:['muro','contención','sostenimiento','berlinés'] },
+    { tags:['Mejora terreno'],             keys:['mejora','vibrof','columna grava','precarga','drena'] },
+    { tags:['Anclajes'],                   keys:['anclaje','tirante','bulbo','postesa'] },
+    { tags:['Sondeos'],                    keys:['sondeo','testigo','perforación','geotecnia'] },
+    { tags:['Cimentaciones especiales'],   keys:['cimentacion','zapata','losa','encepado','pilote'] },
+    // Tipo obra
+    { tags:['Infraestructura'],            keys:['viaducto','metro','tunel','carretera','ferroviario','puente','presa'] },
+    { tags:['Residencial'],                keys:['residencial','vivienda','edificio','sótano','aparcamiento','bloque'] },
+    { tags:['Industrial'],                 keys:['nave','industrial','logistica','almacen','fabrica'] },
+    { tags:['Rehabilitación'],             keys:['rehabilitacion','reforma','refuerzo','consolidacion','reparacion'] },
+    // Tipo contrato
+    { tags:['Obra pública'],               keys:['ayuntamiento','ministerio','adif','renfe','fomento','licitacion publica','concurso'] },
+    { tags:['Urgente'],                    keys:['urgente','urgencia','inmediato','rapido','prioritario'] },
+    // Materiales detectados
+    { tags:['Madrid'],                     keys:['madrid'] },
+    { tags:['Barcelona'],                  keys:['barcelona'] },
+    { tags:['Sevilla'],                    keys:['sevilla'] },
+    { tags:['Valencia'],                   keys:['valencia'] },
+    { tags:['Bilbao'],                     keys:['bilbao'] },
+    { tags:['Zaragoza'],                   keys:['zaragoza'] },
+    { tags:['Málaga'],                     keys:['malaga','málaga'] },
+    { tags:['Galicia'],                    keys:['galicia','vigo','coruna','coruña'] },
+    { tags:['Canarias'],                   keys:['canarias','tenerife','palmas'] },
   ]
-  const csv = [header, ...ejemplos].join('\n')
-  const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' })
-  const url  = URL.createObjectURL(blob)
-  const a    = document.createElement('a')
-  a.href = url; a.download = 'plantilla_partidas_obralicit.csv'; a.click()
-  URL.revokeObjectURL(url)
+
+  for (const regla of reglas) {
+    if (regla.keys.some(k => texto.includes(k))) {
+      regla.tags.forEach(t => detectados.add(t))
+    }
+  }
+
+  return [...detectados]
 }
 
-function importarCSV(file, onPartidas) {
+// Carga SheetJS dinámicamente si no está ya cargado
+function loadSheetJS() {
+  return new Promise((resolve, reject) => {
+    if (window.XLSX) { resolve(window.XLSX); return }
+    const s = document.createElement('script')
+    s.src = 'https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js'
+    s.onload  = () => resolve(window.XLSX)
+    s.onerror = reject
+    document.head.appendChild(s)
+  })
+}
+
+async function descargarPlantillaExcel() {
+  const XLSX = await loadSheetJS()
+  const datos = [
+    // Fila de cabeceras
+    ['TIPO','CODIGO','DESCRIPCION','UNIDAD','MEDICION','PRECIO_SALIDA_EUR'],
+    // Ejemplos — TIPO puede ser "obra" o "material"
+    ['obra','CIM-001','Micropilote Ø168mm L=12m c/camisa perdida','ud',48,850],
+    ['obra','CIM-002','Muro pantalla e=60cm H=8m','m2',320,210],
+    ['material','MAT-001','Tuberia acero galvanizado Ø168mm','m',200,45],
+    ['material','MAT-002','Hormigon HA-25/B/20/IIa suministrado en obra','m3',85,120],
+  ]
+  const ws = XLSX.utils.aoa_to_sheet(datos)
+  // Anchos de columna
+  ws['!cols'] = [{ wch:10 },{ wch:12 },{ wch:50 },{ wch:8 },{ wch:12 },{ wch:20 }]
+  // Estilo cabecera (color naranja) — SheetJS Community no soporta estilos, pero si usan Excel sí lo ven
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Partidas')
+  XLSX.writeFile(wb, 'plantilla_partidas_ObraLicit.xlsx')
+}
+
+async function importarXLSX(file, onPartidas) {
+  const XLSX = await loadSheetJS()
   const reader = new FileReader()
   reader.onload = e => {
-    const lines = e.target.result.split('\n').filter(l=>l.trim())
-    const partidas = []
-    for (let i=1; i<lines.length; i++) {
-      const cols = lines[i].split(',').map(c=>c.trim())
-      if (cols.length < 5 || !cols[1] || !cols[3] || !cols[4]) continue
-      const med = parseFloat(cols[3])
-      const prec = parseFloat(cols[4])
-      if (isNaN(med) || isNaN(prec)) continue
-      partidas.push({ id:'U'+uid(), codigo:cols[0]||'P-'+i, descripcion:cols[1], unidad:cols[2]||'ud', medicion:med, precioSalida:prec })
+    try {
+      const wb    = XLSX.read(e.target.result, { type:'binary' })
+      const ws    = wb.Sheets[wb.SheetNames[0]]
+      const rows  = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' })
+      const partidas = []
+      for (let i=1; i<rows.length; i++) {
+        const [tipo, codigo, desc, unidad, med, prec] = rows[i]
+        if (!desc || med==='' || prec==='') continue
+        const medNum  = parseFloat(String(med).replace(',','.'))
+        const precNum = parseFloat(String(prec).replace(',','.'))
+        if (isNaN(medNum)||isNaN(precNum)) continue
+        partidas.push({
+          id:           'U'+uid(),
+          tipo:         String(tipo||'obra').toLowerCase().trim() === 'material' ? 'material' : 'obra',
+          codigo:       String(codigo||'P-'+i).trim(),
+          descripcion:  String(desc).trim(),
+          unidad:       String(unidad||'ud').trim(),
+          medicion:     medNum,
+          precioSalida: precNum
+        })
+      }
+      if (partidas.length) onPartidas(partidas)
+      else alert('No se encontraron partidas válidas. Asegúrate de usar la plantilla descargada.')
+    } catch(err) {
+      alert('Error leyendo el archivo: ' + err.message)
     }
-    if (partidas.length) onPartidas(partidas)
-    else alert('No se encontraron partidas válidas en el archivo. Revisa el formato.')
   }
-  reader.readAsText(file)
+  reader.readAsBinaryString(file)
 }
 
 // ─── VISTA PREVIA LICITACION ──────────────────────────────────────────────────
@@ -603,7 +680,7 @@ function VistaPrevia({ data, company, onPublish, onBack, loading }) {
         {/* Responsable */}
         {(data.respNombre||data.respEmail||data.respTel) && (
           <div style={{ background:'#f8f7f4', border:'1px solid #eee', borderRadius:8, padding:'12px 16px', marginBottom:16 }}>
-            <div style={{ fontFamily:'Syne,sans-serif', fontSize:11, fontWeight:700, color:'#888', marginBottom:8 }}>RESPONSABLE DE LA LICITACIÓN</div>
+            <div style={{ fontFamily:'Syne,sans-serif', fontSize:11, fontWeight:700, color:'#888', marginBottom:8 }}>RESPONSABLE DE COMPRAS</div>
             <div style={{ fontSize:13, fontWeight:600 }}>{data.respNombre||'—'}</div>
             <div style={{ fontSize:12, color:'#888', marginTop:3 }}>{data.respEmail||''}{data.respEmail&&data.respTel?' · ':''}{data.respTel||''}</div>
           </div>
@@ -674,14 +751,14 @@ function NewProjectModal({ company, session, onClose, onSubmit }) {
   // Paso 2 — partidas
   const [partidas, setPartidas]   = useState([])
   const [archivos, setArchivos]   = useState([])
-  const [pf, setPf]               = useState({ codigo:'', desc:'', unidad:'ud', medicion:'', precio:'' })
+  const [pf, setPf]               = useState({ tipo:'obra', codigo:'', desc:'', unidad:'ud', medicion:'', precio:'' })
   const [loading, setLoading]     = useState(false)
   const csvRef = useRef()
 
   function addPartida() {
     if (!pf.desc||!pf.medicion||!pf.precio) return
-    setPartidas(prev=>[...prev,{ id:'U'+uid(), codigo:pf.codigo||'P-'+(prev.length+1), descripcion:pf.desc, unidad:pf.unidad, medicion:parseFloat(pf.medicion), precioSalida:parseFloat(pf.precio) }])
-    setPf({ codigo:'', desc:'', unidad:'ud', medicion:'', precio:'' })
+    setPartidas(prev=>[...prev,{ id:'U'+uid(), tipo:pf.tipo||'obra', codigo:pf.codigo||'P-'+(prev.length+1), descripcion:pf.desc, unidad:pf.unidad, medicion:parseFloat(pf.medicion), precioSalida:parseFloat(pf.precio) }])
+    setPf({ tipo:'obra', codigo:'', desc:'', unidad:'ud', medicion:'', precio:'' })
   }
 
   const previewData = { nombre, desc, ubic, fechaCierre, fechaInicio, tags, visibilidad, invitadas:invitadas.split(',').map(e=>e.trim()).filter(Boolean), respNombre, respEmail, respTel, partidas, archivos }
@@ -718,7 +795,7 @@ function NewProjectModal({ company, session, onClose, onSubmit }) {
         {/* Header */}
         <div style={{ padding:'24px 28px 0', display:'flex', justifyContent:'space-between', alignItems:'flex-start', position:'sticky', top:0, background:'#fff', zIndex:10, borderBottom:'1px solid #eee', paddingBottom:16 }}>
           <div>
-            <div style={{ fontFamily:'Syne,sans-serif', fontSize:20, fontWeight:800 }}>Publicar licitación</div>
+            <div style={{ fontFamily:'Syne,sans-serif', fontSize:20, fontWeight:800 }}>Publicar obra</div>
             <div style={{ display:'flex', gap:6, marginTop:10 }}>
               {STEPS.map((s,i)=>(
                 <div key={s} style={{ display:'flex', alignItems:'center', gap:6 }}>
@@ -751,7 +828,7 @@ function NewProjectModal({ company, session, onClose, onSubmit }) {
 
             {/* RESPONSABLE */}
             <div style={{ background:'#f8f7f4', border:'1px solid #eee', borderRadius:8, padding:'14px 16px', marginBottom:14 }}>
-              <div style={{ fontFamily:'Syne,sans-serif', fontSize:12, fontWeight:700, color:'#555', marginBottom:12 }}>RESPONSABLE DE LA LICITACIÓN (opcional)</div>
+              <div style={{ fontFamily:'Syne,sans-serif', fontSize:12, fontWeight:700, color:'#555', marginBottom:12 }}>RESPONSABLE DE COMPRAS (opcional)</div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:9 }}>
                 <div><label style={lbl}>NOMBRE</label><input style={inp} placeholder="Nombre y apellidos" value={respNombre} onChange={e=>setRespNombre(e.target.value)} /></div>
                 <div><label style={lbl}>EMAIL DIRECTO</label><input style={inp} type="email" placeholder="responsable@obra.com" value={respEmail} onChange={e=>setRespEmail(e.target.value)} /></div>
@@ -780,7 +857,20 @@ function NewProjectModal({ company, session, onClose, onSubmit }) {
               </div>
             )}
 
-            <div><label style={lbl}>ETIQUETAS</label><TagInput tags={tags} onChange={setTags}/></div>
+            <div>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:4 }}>
+                <label style={lbl}>ETIQUETAS</label>
+                <button type="button" onClick={async ()=>{
+                  const sugeridas = await autoEtiquetar({ nombre, desc, partidas })
+                  if (!sugeridas.length) { alert('No se detectaron etiquetas automáticas. Añádelas manualmente.'); return }
+                  setTags(prev=>[...new Set([...prev,...sugeridas])])
+                }} style={{ fontSize:11, fontWeight:700, color:'#5a3fa0', background:'#f0ecff', border:'1px solid #d4c8ff', borderRadius:4, padding:'3px 10px', cursor:'pointer', fontFamily:'Syne,sans-serif' }}>
+                  ✨ Sugerir automáticamente
+                </button>
+              </div>
+              <TagInput tags={tags} onChange={setTags}/>
+              <div style={{ fontSize:11, color:'#888', marginTop:5 }}>Pulsa "Sugerir" para detectar etiquetas según la descripción y partidas, o añádelas manualmente</div>
+            </div>
 
             <div style={{ display:'flex', justifyContent:'flex-end', gap:10, marginTop:20 }}>
               <button onClick={onClose} style={{ background:'transparent', color:'#888', border:'1.5px solid #ddd', padding:'10px 16px', borderRadius:6, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, cursor:'pointer' }}>Cancelar</button>
@@ -795,12 +885,12 @@ function NewProjectModal({ company, session, onClose, onSubmit }) {
             {/* Toolbar importar/descargar */}
             <div style={{ display:'flex', gap:8, marginBottom:16, flexWrap:'wrap' }}>
               <button onClick={descargarPlantillaExcel} style={{ display:'flex', alignItems:'center', gap:5, padding:'8px 14px', border:'1.5px solid #1a6b3a', borderRadius:6, background:'#e5f4ec', color:'#1a6b3a', cursor:'pointer', fontFamily:'Syne,sans-serif', fontSize:12, fontWeight:700 }}>
-                <Ic n="file" s={13}/> Descargar plantilla CSV
+                <Ic n="file" s={13}/> Descargar plantilla Excel
               </button>
               <button onClick={()=>csvRef.current.click()} style={{ display:'flex', alignItems:'center', gap:5, padding:'8px 14px', border:'1.5px solid #1a4d7a', borderRadius:6, background:'#e5eef7', color:'#1a4d7a', cursor:'pointer', fontFamily:'Syne,sans-serif', fontSize:12, fontWeight:700 }}>
-                <Ic n="paperclip" s={13}/> Importar CSV relleno
+                <Ic n="paperclip" s={13}/> Importar Excel relleno
               </button>
-              <input ref={csvRef} type="file" accept=".csv" style={{ display:'none' }} onChange={e=>{ if(e.target.files[0]) importarCSV(e.target.files[0], p=>setPartidas(prev=>[...prev,...p])) }} />
+              <input ref={csvRef} type="file" accept=".xlsx,.xls" style={{ display:'none' }} onChange={e=>{ if(e.target.files[0]) importarXLSX(e.target.files[0], p=>setPartidas(prev=>[...prev,...p])) }} />
               <div style={{ fontSize:11, color:'#888', alignSelf:'center' }}>O añade las partidas manualmente abajo</div>
             </div>
 
@@ -808,8 +898,11 @@ function NewProjectModal({ company, session, onClose, onSubmit }) {
             {partidas.map(p=>(
               <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 13px', background:'#fff', border:'1px solid #eee', borderRadius:6, marginBottom:6 }}>
                 <div>
-                  <div style={{ fontFamily:'JetBrains Mono,monospace', fontSize:10, color:'#888' }}>{p.codigo}</div>
-                  <div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, marginTop:1 }}>{p.descripcion}</div>
+                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:3, background:p.tipo==='material'?'#e5eef7':'#e5f4ec', color:p.tipo==='material'?'#1a4d7a':'#1a6b3a' }}>{p.tipo==='material'?'MATERIAL':'OBRA'}</span>
+                    <span style={{ fontFamily:'JetBrains Mono,monospace', fontSize:10, color:'#888' }}>{p.codigo}</span>
+                  </div>
+                  <div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, marginTop:2 }}>{p.descripcion}</div>
                   <div style={{ fontSize:11, color:'#888', marginTop:1 }}>{p.medicion} {p.unidad} × {fmt(p.precioSalida)} = <strong>{fmt(p.medicion*p.precioSalida)}</strong></div>
                 </div>
                 <button onClick={()=>setPartidas(prev=>prev.filter(x=>x.id!==p.id))} style={{ background:'none', border:'none', cursor:'pointer', color:'#ccc', fontSize:20, padding:'0 4px' }}>×</button>
@@ -819,11 +912,18 @@ function NewProjectModal({ company, session, onClose, onSubmit }) {
             {/* Form añadir partida manual */}
             <div style={{ background:'#f8f7f4', border:'1.5px dashed #ddd', borderRadius:10, padding:14, marginTop:8, marginBottom:14 }}>
               <div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700, marginBottom:12, color:'#555' }}>+ Añadir partida manualmente</div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:9, marginBottom:9 }}>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:9, marginBottom:9 }}>
+                <div>
+                  <label style={lbl}>TIPO</label>
+                  <select style={{ ...inp, appearance:'auto' }} value={pf.tipo||'obra'} onChange={e=>setPf(f=>({...f,tipo:e.target.value}))}>
+                    <option value="obra">Partida de obra</option>
+                    <option value="material">Material / suministro</option>
+                  </select>
+                </div>
                 <div><label style={lbl}>CÓDIGO</label><input style={inp} placeholder="CIM-001" value={pf.codigo} onChange={e=>setPf(f=>({...f,codigo:e.target.value}))} /></div>
-                <div><label style={lbl}>UNIDAD</label><select style={{ ...inp, appearance:'auto' }} value={pf.unidad} onChange={e=>setPf(f=>({...f,unidad:e.target.value}))}>{['ud','m','m2','m3','kg','t','PA'].map(u=><option key={u}>{u}</option>)}</select></div>
+                <div><label style={lbl}>UNIDAD</label><select style={{ ...inp, appearance:'auto' }} value={pf.unidad} onChange={e=>setPf(f=>({...f,unidad:e.target.value}))}>{['ud','m','m2','m3','kg','t','l','tn','PA'].map(u=><option key={u}>{u}</option>)}</select></div>
               </div>
-              <div style={{ marginBottom:9 }}><label style={lbl}>DESCRIPCIÓN *</label><input style={inp} placeholder="Micropilote Ø168mm L=12m" value={pf.desc} onChange={e=>setPf(f=>({...f,desc:e.target.value}))} /></div>
+              <div style={{ marginBottom:9 }}><label style={lbl}>DESCRIPCIÓN *</label><input style={inp} placeholder={pf.tipo==='material'?'Hormigon HA-25/B/20/IIa suministrado en obra':'Micropilote Ø168mm L=12m'} value={pf.desc} onChange={e=>setPf(f=>({...f,desc:e.target.value}))} /></div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:9, marginBottom:10 }}>
                 <div><label style={lbl}>MEDICIÓN *</label><input style={inp} type="number" placeholder="0" value={pf.medicion} onChange={e=>setPf(f=>({...f,medicion:e.target.value}))} /></div>
                 <div><label style={lbl}>PRECIO SALIDA €/ud *</label><input style={inp} type="number" placeholder="0.00" value={pf.precio} onChange={e=>setPf(f=>({...f,precio:e.target.value}))} /></div>
@@ -1403,8 +1503,8 @@ export default function App() {
       id:                  'P'+uid(),
       slug:                slugify(data.nombre),
       nombre:              data.nombre,
-      empresa:             company?.name || session.user.email,
-      e_init:              (company?.name||'XX').slice(0,2).toUpperCase(),
+      empresa:             company?.name || session?.user?.email || 'Admin',
+      e_init:              (company?.name || session?.user?.email || 'AD').slice(0,2).toUpperCase(),
       e_color:             COLORS[Math.floor(Math.random()*COLORS.length)],
       descripcion:         data.desc,
       ubicacion:           data.ubic || 'España',
@@ -1447,8 +1547,8 @@ export default function App() {
     }
 
     const msg = data.visibilidad==='privada'
-      ? `Licitacion privada publicada — ${data.invitadas?.length||0} empresa(s) notificadas`
-      : 'Licitacion publicada para todos'
+      ? `Obra privada publicada — ${data.invitadas?.length||0} empresa(s) notificadas`
+      : 'Obra publicada para todos'
     showToast(msg)
   }
 
@@ -1490,7 +1590,7 @@ export default function App() {
       {/* BARRA LIVE */}
       <div style={{ background:'#18170f', color:'rgba(255,255,255,.55)', fontSize:11, padding:'5px 24px', display:'flex', gap:14, flexWrap:'wrap', fontFamily:'JetBrains Mono,monospace' }}>
         <span style={{ display:'flex', alignItems:'center', gap:5 }}><span style={{ width:6, height:6, borderRadius:'50%', background:'#4ade80', display:'inline-block' }}></span> EN DIRECTO</span>
-        <span><strong style={{ color:'#fff' }}>{projects.filter(p=>p.estado==='abierta').length}</strong> licitaciones</span>
+        <span><strong style={{ color:'#fff' }}>{projects.filter(p=>p.estado==='abierta').length}</strong> obras</span>
         <span><strong style={{ color:'#fff' }}>{bids.filter(b=>!b.expirada).length}</strong> ofertas activas</span>
         {avgSaving!=='—'&&<span><strong style={{ color:'#4ade80' }}>-{avgSaving}%</strong> ahorro medio</span>}
       </div>
@@ -1519,7 +1619,7 @@ export default function App() {
               {noLeidos>0 && <span style={{ position:'absolute', top:2, right:2, width:16, height:16, borderRadius:'50%', background:'#e85d04', color:'#fff', fontSize:9, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center' }}>{noLeidos}</span>}
             </button>
             <button onClick={()=>setShowNew(true)} style={{ display:'flex', alignItems:'center', gap:6, padding:'8px 18px', borderRadius:22, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, cursor:'pointer', border:'none', background:'#e85d04', color:'#fff' }}>
-              <Ic n="plus" s={14}/> Publicar
+              <Ic n="plus" s={14}/> Publicar obra
             </button>
             {/* Avatar / Perfil */}
             <div style={{ display:'flex', alignItems:'center', gap:8, padding:'5px 14px 5px 6px', background:'#f2f0eb', border:'1.5px solid #eee', borderRadius:22, cursor:'pointer', fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600 }}
