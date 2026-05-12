@@ -960,7 +960,7 @@ function NewProjectModal({ company, session, onClose, onSubmit }) {
 // ─── PANEL PERFIL ─────────────────────────────────────────────────────────────
 const ROLES_DISPONIBLES = ['constructora','subcontrata','especialista','promotora','ingeniería','laboratorio','suministrador']
 
-function ProfilePanel({ user, company, projects, bids, onClose, onOpenDetail, onNewMsg, onCompanyUpdate }) {
+function ProfilePanel({ user, company, projects, bids, onClose, onOpenDetail, onNewMsg, onCompanyUpdate, onDeleteProject, onDeleteBid, isAdmin }) {
   const misProyectos = projects.filter(p=>p.user_id===user.id)
   const misPujas     = bids.filter(b=>b.user_id===user.id)
   const adjudicadas  = misPujas.filter(b=>b.estado==='adjudicada')
@@ -1061,13 +1061,25 @@ function ProfilePanel({ user, company, projects, bids, onClose, onOpenDetail, on
         <div style={{ padding:'20px 28px' }}>
           {tab==='proyectos' && (
             <>
-              {misProyectos.length===0 ? <div style={{ textAlign:'center', padding:'40px 20px', color:'#888' }}><div style={{ fontSize:32, marginBottom:10 }}>🏗️</div><div style={{ fontFamily:'Syne', fontWeight:700, marginBottom:6 }}>Sin proyectos publicados</div></div> :
-                misProyectos.map(p=>(
-                  <div key={p.id} onClick={()=>{ onOpenDetail(p.id); onClose() }} style={{ padding:'14px 16px', border:'1px solid #eee', borderRadius:10, marginBottom:10, cursor:'pointer' }}>
-                    <div style={{ fontFamily:'Syne,sans-serif', fontSize:14, fontWeight:700, marginBottom:4 }}>{p.nombre}</div>
-                    <div style={{ fontSize:12, color:'#888' }}>{p.ubicacion} — Cierre: {p.fecha_cierre} — {bids.filter(b=>b.proyecto_id===p.id).length} oferta(s)</div>
-                    <div style={{ display:'flex', gap:5, marginTop:8, flexWrap:'wrap' }}>
-                      {p.tags?.map(t=><Tag key={t} t={t}/>)}
+              {isAdmin && <div style={{ padding:'8px 12px', background:'#fff2ec', border:'1px solid #ffcba4', borderRadius:6, marginBottom:14, fontSize:12, color:'#c94f03', fontWeight:600 }}>Vista ADMIN — puedes eliminar cualquier publicación</div>}
+              {(isAdmin ? projects : misProyectos).length===0
+                ? <div style={{ textAlign:'center', padding:'40px 20px', color:'#888' }}><div style={{ fontSize:32, marginBottom:10 }}>🏗️</div><div style={{ fontFamily:'Syne', fontWeight:700, marginBottom:6 }}>Sin proyectos publicados</div></div>
+                : (isAdmin ? projects : misProyectos).map(p=>(
+                  <div key={p.id} style={{ padding:'14px 16px', border:'1px solid #eee', borderRadius:10, marginBottom:10 }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8 }}>
+                      <div style={{ flex:1, cursor:'pointer' }} onClick={()=>{ onOpenDetail(p.id); onClose() }}>
+                        <div style={{ fontFamily:'Syne,sans-serif', fontSize:14, fontWeight:700, marginBottom:3 }}>{p.nombre}</div>
+                        {isAdmin && <div style={{ fontSize:11, color:'#888', marginBottom:3 }}>Publicado por: <strong>{p.empresa}</strong></div>}
+                        <div style={{ fontSize:12, color:'#888' }}>{p.ubicacion} — Cierre: {p.fecha_cierre} — {bids.filter(b=>b.proyecto_id===p.id).length} oferta(s)</div>
+                        <div style={{ display:'flex', gap:5, marginTop:8, flexWrap:'wrap' }}>{p.tags?.map(t=><Tag key={t} t={t}/>)}</div>
+                      </div>
+                      <button
+                        onClick={e=>{ e.stopPropagation(); if(window.confirm('¿Eliminar esta publicación? Se borrarán también todas sus pujas.')) onDeleteProject(p.id) }}
+                        style={{ flexShrink:0, background:'#fdecea', border:'1px solid #f5c6c2', color:'#c0392b', borderRadius:6, padding:'6px 12px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Syne,sans-serif' }}
+                        title="Eliminar publicación"
+                      >
+                        Eliminar
+                      </button>
                     </div>
                   </div>
                 ))
@@ -1076,21 +1088,41 @@ function ProfilePanel({ user, company, projects, bids, onClose, onOpenDetail, on
           )}
           {tab==='pujas' && (
             <>
-              {misPujas.length===0 ? <div style={{ textAlign:'center', padding:'40px 20px', color:'#888' }}><div style={{ fontSize:32, marginBottom:10 }}>📋</div><div style={{ fontFamily:'Syne', fontWeight:700, marginBottom:6 }}>Sin pujas enviadas</div></div> :
-                misPujas.map(b=>{
+              {isAdmin && <div style={{ padding:'8px 12px', background:'#fff2ec', border:'1px solid #ffcba4', borderRadius:6, marginBottom:14, fontSize:12, color:'#c94f03', fontWeight:600 }}>Vista ADMIN — puedes eliminar cualquier puja</div>}
+              {(isAdmin ? bids : misPujas).length===0
+                ? <div style={{ textAlign:'center', padding:'40px 20px', color:'#888' }}><div style={{ fontSize:32, marginBottom:10 }}>📋</div><div style={{ fontFamily:'Syne', fontWeight:700, marginBottom:6 }}>Sin pujas enviadas</div></div>
+                : (isAdmin ? bids : misPujas).map(b=>{
                   const proj = projects.find(p=>p.id===b.proyecto_id)
+                  const puedeRetirar = b.estado === 'pendiente' && !b.expirada
                   return (
-                    <div key={b.id} style={{ padding:'14px 16px', border:'1px solid #eee', borderRadius:10, marginBottom:10, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                      <div>
-                        <div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700 }}>{proj?.nombre||'Proyecto'}</div>
-                        <div style={{ fontSize:12, color:'#888', marginTop:3 }}>{b.fecha} — Plazo: {b.plazo}d</div>
-                        {b.validez_tipo==='fecha' && <div style={{ fontSize:11, color:'#c97a0a', marginTop:2 }}>Válida hasta: {b.validez_fecha}</div>}
-                      </div>
-                      <div style={{ textAlign:'right' }}>
-                        <div style={{ fontFamily:'JetBrains Mono,monospace', fontSize:16, fontWeight:600 }}>{fmt(b.precio)}</div>
-                        <span style={{ fontSize:10, fontWeight:700, padding:'3px 8px', borderRadius:4, background:b.estado==='adjudicada'?'#e5f4ec':b.expirada?'#f0f0f0':'#fff8e6', color:b.estado==='adjudicada'?'#1a6b3a':b.expirada?'#888':'#b07a10' }}>
-                          {b.expirada?'EXPIRADA':b.estado.toUpperCase()}
-                        </span>
+                    <div key={b.id} style={{ padding:'14px 16px', border:'1px solid #eee', borderRadius:10, marginBottom:10 }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8 }}>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700 }}>{proj?.nombre||'Proyecto'}</div>
+                          {isAdmin && <div style={{ fontSize:11, color:'#888', marginTop:1 }}>Puja de: <strong>{b.empresa}</strong></div>}
+                          <div style={{ fontSize:12, color:'#888', marginTop:3 }}>{b.fecha} — Plazo: {b.plazo}d</div>
+                          {b.observaciones && <div style={{ fontSize:11, color:'#555', marginTop:3, fontStyle:'italic' }}>"{b.observaciones.slice(0,80)}{b.observaciones.length>80?'...':''}"</div>}
+                          {b.validez_tipo==='fecha' && <div style={{ fontSize:11, color:'#c97a0a', marginTop:2 }}>Válida hasta: {b.validez_fecha}</div>}
+                        </div>
+                        <div style={{ textAlign:'right', flexShrink:0 }}>
+                          <div style={{ fontFamily:'JetBrains Mono,monospace', fontSize:16, fontWeight:600 }}>{fmt(b.precio)}</div>
+                          <span style={{ fontSize:10, fontWeight:700, padding:'3px 8px', borderRadius:4, display:'inline-block', marginTop:3, background:b.estado==='adjudicada'?'#e5f4ec':b.expirada?'#f0f0f0':'#fff8e6', color:b.estado==='adjudicada'?'#1a6b3a':b.expirada?'#888':'#b07a10' }}>
+                            {b.expirada?'EXPIRADA':b.estado.toUpperCase()}
+                          </span>
+                          <div style={{ marginTop:8, display:'flex', gap:6, justifyContent:'flex-end' }}>
+                            {(puedeRetirar || isAdmin) && (
+                              <button
+                                onClick={()=>{ if(window.confirm(isAdmin?'¿Eliminar esta puja?':'¿Retirar tu oferta? Esta acción no se puede deshacer.')) onDeleteBid(b.id) }}
+                                style={{ background:'#fdecea', border:'1px solid #f5c6c2', color:'#c0392b', borderRadius:5, padding:'4px 10px', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'Syne,sans-serif' }}
+                              >
+                                {isAdmin ? 'Eliminar' : 'Retirar oferta'}
+                              </button>
+                            )}
+                            {b.estado==='adjudicada' && !isAdmin && (
+                              <span style={{ fontSize:11, color:'#1a6b3a', fontWeight:600 }}>No se puede retirar</span>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )
@@ -1552,6 +1584,21 @@ export default function App() {
     showToast(msg)
   }
 
+  async function handleDeleteProject(id) {
+    const { error } = await supabase.from('projects').delete().eq('id', id)
+    if (error) { showToast('Error: ' + error.message); return }
+    setProjects(prev => prev.filter(p => p.id !== id))
+    setBids(prev => prev.filter(b => b.proyecto_id !== id))
+    showToast('Publicacion eliminada')
+  }
+
+  async function handleDeleteBid(id) {
+    const { error } = await supabase.from('bids').delete().eq('id', id)
+    if (error) { showToast('Error: ' + error.message); return }
+    setBids(prev => prev.filter(b => b.id !== id))
+    showToast('Oferta retirada')
+  }
+
   async function handleOpenDetail(id) {
     setDetailId(id)
     await supabase.rpc('increment_views',{ project_id:id }).catch(()=>{})
@@ -1759,7 +1806,7 @@ export default function App() {
       {/* PANELES Y MODALES */}
       {detailProj && <DetailPanel proj={detailProj} bids={bids} user={session?.user} company={company} onClose={()=>setDetailId(null)} onBid={handleBid}/>}
       {showNew    && <NewProjectModal company={company} session={session} onClose={()=>setShowNew(false)} onSubmit={handleNewProject}/>}
-      {showProfile && <ProfilePanel user={session.user} company={company} projects={projects} bids={bids} onClose={()=>setShowProfile(false)} onOpenDetail={handleOpenDetail} onNewMsg={handleNewMsg} onCompanyUpdate={updates=>setCompany(prev=>({...prev,...updates}))}/>}
+      {showProfile && <ProfilePanel user={session.user} company={company} projects={projects} bids={bids} onClose={()=>setShowProfile(false)} onOpenDetail={handleOpenDetail} onNewMsg={handleNewMsg} onCompanyUpdate={updates=>setCompany(prev=>({...prev,...updates}))} onDeleteProject={handleDeleteProject} onDeleteBid={handleDeleteBid} isAdmin={session.user.id===ADMIN_USER_ID}/>}
       {showMsgs   && <MessagesPanel user={session.user} company={company} onClose={()=>setShowMsgs(false)} initialTarget={msgTarget}/>}
       {toast      && <Toast msg={toast}/>}
     </div>
