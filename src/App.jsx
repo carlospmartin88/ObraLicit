@@ -565,6 +565,13 @@ function DetailPanel({ proj, bids, user, company, onClose, onBid, onDeleteBid, s
                         {esConstructora && <span style={{ fontSize:11, fontWeight:700, padding:'2px 7px', borderRadius:4, display:'inline-block', marginTop:3, background:parseFloat(saving)>0?'#e5f4ec':'#fdecea', color:parseFloat(saving)>0?'#1a6b3a':'#c0392b' }}>
                           {parseFloat(saving)>0?'-':'+'}{Math.abs(saving)}% vs salida
                         </span>}
+                        {(esAdmin || esDuenio) && onDeleteBid && (
+                          <button
+                            onClick={()=>{ if(window.confirm('¿Eliminar esta oferta?')) onDeleteBid(bid.id) }}
+                            style={{ display:'block', marginTop:8, marginLeft:'auto', background:'#fdecea', border:'1px solid #f5c6c2', color:'#c0392b', borderRadius:4, padding:'4px 10px', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'Syne,sans-serif' }}>
+                            Eliminar oferta
+                          </button>
+                        )}
                       </div>
                     </div>
                   )
@@ -1271,7 +1278,7 @@ function ProfilePanel({ user, company, projects, bids, onClose, onOpenDetail, on
 
 
 // ─── PANEL NOTIFICACIONES ─────────────────────────────────────────────────────
-function NotifPanel({ user, onClose }) {
+function NotifPanel({ user, onClose, onOpenDetail }) {
   const [notifs, setNotifs] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -1320,14 +1327,25 @@ function NotifPanel({ user, onClose }) {
             </div>
           )}
           {notifs.map(n=>(
-            <div key={n.id} style={{ padding:'14px 20px', borderBottom:'1px solid #eee', background:n.leida?'#fff':'#fef9f5', cursor:'default' }}
-              onClick={async ()=>{ if(!n.leida){ await supabase.from('notifications').update({ leida:true }).eq('id',n.id); setNotifs(prev=>prev.map(x=>x.id===n.id?{...x,leida:true}:x)) } }}>
+            <div key={n.id} style={{ padding:'14px 20px', borderBottom:'1px solid #eee', background:n.leida?'#fff':'#fef9f5', cursor:(n.tipo==='puja'||n.tipo==='obra')?'pointer':'default' }}
+              onClick={async ()=>{
+                if(!n.leida){ await supabase.from('notifications').update({ leida:true }).eq('id',n.id); setNotifs(prev=>prev.map(x=>x.id===n.id?{...x,leida:true}:x)) }
+                // Navegar a la obra si tiene proyecto_id
+                const data = typeof n.data === 'string' ? JSON.parse(n.data||'{}') : (n.data||{})
+                if ((n.tipo==='puja'||n.tipo==='obra') && data.proyecto_id && onOpenDetail) {
+                  onOpenDetail(data.proyecto_id)
+                  onClose()
+                }
+              }}>
               <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
                 <div style={{ fontSize:20, flexShrink:0 }}>{iconoTipo(n.tipo)}</div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700, marginBottom:2 }}>{n.titulo}</div>
                   {n.mensaje && <div style={{ fontSize:12, color:'#555', lineHeight:1.5 }}>{n.mensaje}</div>}
-                  <div style={{ fontSize:11, color:'#aaa', marginTop:5 }}>{new Date(n.created_at).toLocaleString('es-ES',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:5 }}>
+                    <div style={{ fontSize:11, color:'#aaa' }}>{new Date(n.created_at).toLocaleString('es-ES',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+                    {(n.tipo==='puja'||n.tipo==='obra') && <div style={{ fontSize:10, color:'#e85d04', fontWeight:700 }}>Clic para ver la obra →</div>}
+                  </div>
                 </div>
                 {!n.leida && <div style={{ width:8, height:8, borderRadius:'50%', background:'#e85d04', flexShrink:0, marginTop:4 }}/>}
               </div>
@@ -1656,11 +1674,22 @@ function MessagesPanel({ user, company, onClose, initialTarget, isAdmin }) {
   async function enviar() {
     if (!texto.trim()||!conv) return
     setLoading(true)
-    await supabase.from('messages').insert([{
+    const nuevoMsg = {
+      id: 'M'+Math.random().toString(36).slice(2,10),
       from_user_id: user.id, to_user_id: conv.id,
       from_empresa: company?.name, to_empresa: conv.name,
-      asunto: asunto||'Sin asunto', contenido: texto
+      asunto: asunto||'Sin asunto', contenido: texto,
+      leido: false, created_at: new Date().toISOString()
+    }
+    const { error } = await supabase.from('messages').insert([{
+      from_user_id: nuevoMsg.from_user_id, to_user_id: nuevoMsg.to_user_id,
+      from_empresa: nuevoMsg.from_empresa, to_empresa: nuevoMsg.to_empresa,
+      asunto: nuevoMsg.asunto, contenido: nuevoMsg.contenido
     }])
+    if (!error) {
+      // Añadir al estado local inmediatamente
+      setMensajes(prev=>[nuevoMsg,...prev])
+    }
     setTexto(''); setAsunto(''); setLoading(false)
   }
 
@@ -1855,7 +1884,12 @@ export default function App() {
           return [payload.new,...prev]
         }))
       .on('postgres_changes',{ event:'INSERT', schema:'public', table:'bids' },
-        payload=>setBids(prev=>[payload.new,...prev]))
+        payload=>setBids(prev=>{
+          if (prev.find(b=>b.id===payload.new.id)) return prev
+          return [payload.new,...prev]
+        }))
+      .on('postgres_changes',{ event:'DELETE', schema:'public', table:'bids' },
+        payload=>setBids(prev=>prev.filter(b=>b.id!==payload.old.id)))
       .on('postgres_changes',{ event:'UPDATE', schema:'public', table:'bids' },
         payload=>setBids(prev=>prev.map(b=>b.id===payload.new.id?payload.new:b)))
       .subscribe()
@@ -1933,6 +1967,12 @@ export default function App() {
     }
     const { error } = await supabase.from('bids').insert([bidData])
     if (error) { showToast('Error: '+error.message); return }
+
+    // Añadir al estado local INMEDIATAMENTE sin esperar realtime
+    setBids(prev => {
+      if (prev.find(b=>b.id===bidData.id)) return prev
+      return [bidData, ...prev]
+    })
 
     // Notificar al publicador de la obra
     if (proj.user_id && proj.user_id !== session.user.id) {
@@ -2265,7 +2305,7 @@ export default function App() {
       {detailProj && <DetailPanel proj={detailProj} bids={bids} user={session?.user} company={company} onClose={()=>setDetailId(null)} onBid={handleBid} onDeleteBid={handleDeleteBid} setProjects={setProjects}/>}
       {showNew    && <NewProjectModal company={company} session={session} onClose={()=>setShowNew(false)} onSubmit={handleNewProject}/>}
       {showProfile && <ProfilePanel user={session.user} company={company} projects={projects} bids={bids} onClose={()=>setShowProfile(false)} onOpenDetail={handleOpenDetail} onNewMsg={handleNewMsg} onCompanyUpdate={updates=>setCompany(prev=>({...prev,...updates}))} onDeleteProject={handleDeleteProject} onDeleteBid={handleDeleteBid} isAdmin={session.user.id===ADMIN_USER_ID}/>}
-      {showNotifs && <NotifPanel user={session.user} onClose={()=>{ setShowNotifs(false); setNoLeidosNotif(0) }}/>}
+      {showNotifs && <NotifPanel user={session.user} onClose={()=>{ setShowNotifs(false); setNoLeidosNotif(0) }} onOpenDetail={handleOpenDetail}/>}
       {showMsgs   && <MessagesPanel user={session.user} company={company} onClose={()=>setShowMsgs(false)} initialTarget={msgTarget} isAdmin={session.user.id===ADMIN_USER_ID}/>}
       {toast      && <Toast msg={toast}/>}
     </div>
