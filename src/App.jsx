@@ -537,19 +537,146 @@ function DetailPanel({ proj, bids, user, company, onClose, onBid }) {
   )
 }
 
+// ─── PLANTILLA EXCEL ─────────────────────────────────────────────────────────
+function descargarPlantillaExcel() {
+  // Crear CSV con estructura de partidas para importar
+  const header = 'CODIGO,DESCRIPCION,UNIDAD,MEDICION,PRECIO_SALIDA_EUR'
+  const ejemplos = [
+    'CIM-001,Micropilote Ø168mm L=12m c/camisa perdida,ud,48,850',
+    'CIM-002,Muro pantalla e=60cm H=8m,m2,320,210',
+    'INY-001,Inyeccion compactacion terreno granular,m,560,38',
+  ]
+  const csv = [header, ...ejemplos].join('\n')
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url; a.download = 'plantilla_partidas_obralicit.csv'; a.click()
+  URL.revokeObjectURL(url)
+}
+
+function importarCSV(file, onPartidas) {
+  const reader = new FileReader()
+  reader.onload = e => {
+    const lines = e.target.result.split('\n').filter(l=>l.trim())
+    const partidas = []
+    for (let i=1; i<lines.length; i++) {
+      const cols = lines[i].split(',').map(c=>c.trim())
+      if (cols.length < 5 || !cols[1] || !cols[3] || !cols[4]) continue
+      const med = parseFloat(cols[3])
+      const prec = parseFloat(cols[4])
+      if (isNaN(med) || isNaN(prec)) continue
+      partidas.push({ id:'U'+uid(), codigo:cols[0]||'P-'+i, descripcion:cols[1], unidad:cols[2]||'ud', medicion:med, precioSalida:prec })
+    }
+    if (partidas.length) onPartidas(partidas)
+    else alert('No se encontraron partidas válidas en el archivo. Revisa el formato.')
+  }
+  reader.readAsText(file)
+}
+
+// ─── VISTA PREVIA LICITACION ──────────────────────────────────────────────────
+function VistaPrevia({ data, company, onPublish, onBack, loading }) {
+  const totalRef = data.partidas.reduce((s,p)=>s+p.medicion*p.precioSalida, 0)
+  const inp = { padding:'9px 12px', border:'1.5px solid #ddd', borderRadius:6, fontSize:14, outline:'none', width:'100%', fontFamily:'Barlow,sans-serif' }
+  const lbl = { fontFamily:'Syne,sans-serif', fontSize:10, fontWeight:700, letterSpacing:'.06em', color:'#888', display:'block', marginBottom:4 }
+  return (
+    <div style={{ padding:'0 0 24px' }}>
+      {/* Header preview */}
+      <div style={{ background:'#18170f', color:'#fff', padding:'24px 28px 20px', margin:'0 0 20px' }}>
+        <div style={{ fontSize:11, color:'rgba(255,255,255,.4)', marginBottom:4, fontWeight:700 }}>VISTA PREVIA — así verán tu licitación</div>
+        <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:'rgba(255,255,255,.4)', marginBottom:8 }}>
+          <div style={{ width:20,height:20,borderRadius:4,background:'#e85d04',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:800,color:'#fff' }}>{(company?.name||'XX').slice(0,2).toUpperCase()}</div>
+          {company?.name}
+        </div>
+        <div style={{ fontFamily:'Syne,sans-serif', fontSize:20, fontWeight:800, lineHeight:1.2, marginBottom:6 }}>{data.nombre||'Sin título'}</div>
+        <div style={{ fontSize:13, color:'rgba(255,255,255,.6)', lineHeight:1.65 }}>{data.desc||'Sin descripción'}</div>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginTop:12 }}>
+          {data.tags.map(t=><span key={t} style={{ padding:'3px 9px',borderRadius:4,fontSize:11,fontWeight:600,background:'rgba(255,255,255,.1)',color:'rgba(255,255,255,.7)' }}>{t}</span>)}
+        </div>
+        <div style={{ display:'flex', gap:20, marginTop:14, flexWrap:'wrap' }}>
+          {[['Ubicación',data.ubic||'—'],['Cierre ofertas',data.fechaCierre||'—'],['Inicio previsto',data.fechaInicio||'—'],['Visibilidad',data.visibilidad==='privada'?'Privada':'Pública']].map(([l,v])=>(
+            <div key={l}><div style={{ fontSize:10,color:'rgba(255,255,255,.35)',fontWeight:700 }}>{l.toUpperCase()}</div><div style={{ fontSize:13,fontWeight:600,color:'#fff',marginTop:2 }}>{v}</div></div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ padding:'0 28px' }}>
+        {/* Responsable */}
+        {(data.respNombre||data.respEmail||data.respTel) && (
+          <div style={{ background:'#f8f7f4', border:'1px solid #eee', borderRadius:8, padding:'12px 16px', marginBottom:16 }}>
+            <div style={{ fontFamily:'Syne,sans-serif', fontSize:11, fontWeight:700, color:'#888', marginBottom:8 }}>RESPONSABLE DE LA LICITACIÓN</div>
+            <div style={{ fontSize:13, fontWeight:600 }}>{data.respNombre||'—'}</div>
+            <div style={{ fontSize:12, color:'#888', marginTop:3 }}>{data.respEmail||''}{data.respEmail&&data.respTel?' · ':''}{data.respTel||''}</div>
+          </div>
+        )}
+
+        {/* Resumen financiero */}
+        <div style={{ display:'flex', gap:0, border:'1px solid #eee', borderRadius:8, overflow:'hidden', marginBottom:16 }}>
+          {[['PARTIDAS',data.partidas.length,''],['PRESUP. TOTAL',fmt(totalRef),'#e85d04'],['EMPRESAS INVITADAS',data.visibilidad==='privada'?(data.invitadas||[]).length:'Pública','']].map(([l,v,c],i,a)=>(
+            <div key={l} style={{ flex:1, padding:'12px 14px', background:'#f8f7f4', borderRight:i<a.length-1?'1px solid #eee':'none' }}>
+              <div style={{ fontFamily:'JetBrains Mono,monospace',fontSize:16,fontWeight:600,color:c||'#18170f' }}>{v}</div>
+              <div style={{ fontSize:10,color:'#888',fontWeight:700,letterSpacing:'.04em',marginTop:2 }}>{l}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Partidas */}
+        <div style={{ fontFamily:'Syne,sans-serif', fontSize:11, fontWeight:700, color:'#888', marginBottom:10 }}>PARTIDAS</div>
+        {data.partidas.map(p=>(
+          <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 14px', border:'1px solid #eee', borderRadius:6, marginBottom:6, background:'#fff' }}>
+            <div>
+              <div style={{ fontFamily:'JetBrains Mono,monospace', fontSize:11, color:'#888' }}>{p.codigo}</div>
+              <div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, marginTop:2 }}>{p.descripcion}</div>
+              <div style={{ fontSize:12, color:'#888', marginTop:2 }}>{p.medicion} {p.unidad} × {fmt(p.precioSalida)} = <strong>{fmt(p.medicion*p.precioSalida)}</strong></div>
+            </div>
+          </div>
+        ))}
+
+        {data.archivos?.length>0 && (
+          <div style={{ marginTop:12 }}>
+            <div style={{ fontFamily:'Syne,sans-serif', fontSize:11, fontWeight:700, color:'#888', marginBottom:8 }}>DOCUMENTACIÓN ADJUNTA</div>
+            <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+              {data.archivos.map(a=>(
+                <span key={a.path} style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 10px', background:'#f0f0f0', borderRadius:4, fontSize:11 }}>
+                  <Ic n="file" s={11}/>{a.nombre}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={{ display:'flex', gap:10, marginTop:24 }}>
+          <button onClick={onBack} style={{ background:'transparent', color:'#888', border:'1.5px solid #ddd', padding:'11px 20px', borderRadius:6, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, cursor:'pointer' }}>← Editar</button>
+          <button onClick={onPublish} disabled={loading} style={{ flex:1, background:'#e85d04', color:'#fff', border:'none', padding:'11px 0', borderRadius:6, fontFamily:'Syne,sans-serif', fontSize:14, fontWeight:700, cursor:'pointer', opacity:loading?.6:1 }}>
+            {loading ? 'Publicando...' : data.visibilidad==='privada' ? 'Publicar (solo invitados)' : 'Publicar para todos'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── MODAL NUEVO PROYECTO ──────────────────────────────────────────────────────
 function NewProjectModal({ company, session, onClose, onSubmit }) {
-  const [step, setStep]         = useState(1)
-  const [nombre, setNombre]     = useState('')
-  const [desc, setDesc]         = useState('')
-  const [ubic, setUbic]         = useState('')
-  const [fecha, setFecha]       = useState('')
-  const [email_c, setEmailC]    = useState('')
-  const [tags, setTags]         = useState([])
-  const [partidas, setPartidas] = useState([])
-  const [archivos, setArchivos] = useState([])
-  const [pf, setPf]             = useState({ codigo:'', desc:'', unidad:'ud', medicion:'', precio:'' })
-  const [loading, setLoading]   = useState(false)
+  const [step, setStep]           = useState(1)
+  // Paso 1 — info general
+  const [nombre, setNombre]       = useState('')
+  const [desc, setDesc]           = useState('')
+  const [ubic, setUbic]           = useState('')
+  const [fechaCierre, setFechaCierre] = useState('')
+  const [fechaInicio, setFechaInicio] = useState('')
+  const [tags, setTags]           = useState([])
+  const [visibilidad, setVis]     = useState('publica')
+  const [invitadas, setInvitadas] = useState('')  // emails separados por coma
+  // Responsable
+  const [respNombre, setRespNombre] = useState('')
+  const [respEmail,  setRespEmail]  = useState('')
+  const [respTel,    setRespTel]    = useState('')
+  // Paso 2 — partidas
+  const [partidas, setPartidas]   = useState([])
+  const [archivos, setArchivos]   = useState([])
+  const [pf, setPf]               = useState({ codigo:'', desc:'', unidad:'ud', medicion:'', precio:'' })
+  const [loading, setLoading]     = useState(false)
+  const csvRef = useRef()
 
   function addPartida() {
     if (!pf.desc||!pf.medicion||!pf.precio) return
@@ -557,81 +684,174 @@ function NewProjectModal({ company, session, onClose, onSubmit }) {
     setPf({ codigo:'', desc:'', unidad:'ud', medicion:'', precio:'' })
   }
 
+  const previewData = { nombre, desc, ubic, fechaCierre, fechaInicio, tags, visibilidad, invitadas:invitadas.split(',').map(e=>e.trim()).filter(Boolean), respNombre, respEmail, respTel, partidas, archivos }
+
   async function publish() {
     setLoading(true)
-    await onSubmit({ nombre, desc, ubic, fecha, tags, partidas, archivos, email_contacto: email_c })
+    await onSubmit({
+      nombre, desc, ubic,
+      fecha:        fechaCierre,
+      fechaInicio,
+      tags,
+      partidas,
+      archivos,
+      visibilidad,
+      invitadas:    invitadas.split(',').map(e=>e.trim()).filter(Boolean),
+      email_contacto: respEmail,
+      responsable_nombre: respNombre,
+      responsable_email:  respEmail,
+      responsable_tel:    respTel,
+    })
     setLoading(false)
     onClose()
   }
 
   const inp = { padding:'9px 12px', border:'1.5px solid #ddd', borderRadius:6, fontSize:14, outline:'none', width:'100%', fontFamily:'Barlow,sans-serif' }
   const lbl = { fontFamily:'Syne,sans-serif', fontSize:10, fontWeight:700, letterSpacing:'.06em', color:'#888', display:'block', marginBottom:4 }
+  const canNext1 = nombre.trim() && fechaCierre
+  const STEPS = ['Información','Partidas','Vista previa']
 
   return (
     <div style={{ position:'fixed', inset:0, zIndex:300, background:'rgba(0,0,0,.6)', backdropFilter:'blur(8px)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }} onClick={e=>{ if(e.target===e.currentTarget) onClose() }}>
-      <div style={{ background:'#fff', borderRadius:20, width:'100%', maxWidth:660, maxHeight:'90vh', overflowY:'auto', boxShadow:'0 24px 80px rgba(0,0,0,.2)' }}>
-        <div style={{ padding:'24px 28px 0', display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+      <div style={{ background:'#fff', borderRadius:20, width:'100%', maxWidth:700, maxHeight:'92vh', overflowY:'auto', boxShadow:'0 24px 80px rgba(0,0,0,.2)' }}>
+
+        {/* Header */}
+        <div style={{ padding:'24px 28px 0', display:'flex', justifyContent:'space-between', alignItems:'flex-start', position:'sticky', top:0, background:'#fff', zIndex:10, borderBottom:'1px solid #eee', paddingBottom:16 }}>
           <div>
-            <div style={{ fontFamily:'Syne,sans-serif', fontSize:22, fontWeight:800 }}>Publicar licitación</div>
-            <div style={{ fontSize:13, color:'#888', marginTop:4 }}>Paso {step} de 2 — {step===1?'Información general':'Partidas y documentación'}</div>
-          </div>
-          <button onClick={onClose} style={{ width:32, height:32, borderRadius:'50%', background:'#f2f0eb', border:'1px solid #ddd', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontSize:20 }}>×</button>
-        </div>
-        <div style={{ padding:'20px 28px' }}>
-          <div style={{ display:'flex', gap:6, marginBottom:22 }}>
-            {[1,2].map(s=><div key={s} style={{ flex:1, height:4, borderRadius:2, background:s<=step?'#e85d04':'#eee', transition:'.3s' }}/>)}
-          </div>
-          {step===1 && (
-            <>
-              <div style={{ marginBottom:12 }}><label style={lbl}>NOMBRE DEL PROYECTO *</label><input style={inp} placeholder="Ej: Viaducto M-50 — Cimentaciones especiales" value={nombre} onChange={e=>setNombre(e.target.value)} /></div>
-              <div style={{ marginBottom:12 }}><label style={lbl}>DESCRIPCIÓN</label><textarea style={{ ...inp, resize:'vertical', minHeight:72, fontSize:13 }} placeholder="Alcance, condicionantes, maquinaria requerida..." value={desc} onChange={e=>setDesc(e.target.value)} /></div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
-                <div><label style={lbl}>UBICACIÓN</label><input style={inp} placeholder="Ciudad / provincia" value={ubic} onChange={e=>setUbic(e.target.value)} /></div>
-                <div><label style={lbl}>FECHA LÍMITE *</label><input style={inp} type="date" value={fecha} onChange={e=>setFecha(e.target.value)} /></div>
-              </div>
-              <div style={{ marginBottom:12 }}><label style={lbl}>EMAIL CONTACTO (para notificaciones de pujas)</label><input style={inp} type="email" placeholder="obras@tuempresa.com" value={email_c} onChange={e=>setEmailC(e.target.value)} /></div>
-              <div><label style={lbl}>ETIQUETAS</label><TagInput tags={tags} onChange={setTags}/></div>
-            </>
-          )}
-          {step===2 && (
-            <>
-              {partidas.map(p=>(
-                <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'9px 12px', background:'#fff', border:'1px solid #eee', borderRadius:6, marginBottom:6 }}>
-                  <div><div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600 }}>{p.descripcion}</div><div style={{ fontSize:11, color:'#888', marginTop:1 }}>{p.codigo} — {p.medicion} {p.unidad} — {fmt(p.precioSalida)}/{p.unidad}</div></div>
-                  <button onClick={()=>setPartidas(prev=>prev.filter(x=>x.id!==p.id))} style={{ background:'none', border:'none', cursor:'pointer', color:'#888', fontSize:20 }}>×</button>
+            <div style={{ fontFamily:'Syne,sans-serif', fontSize:20, fontWeight:800 }}>Publicar licitación</div>
+            <div style={{ display:'flex', gap:6, marginTop:10 }}>
+              {STEPS.map((s,i)=>(
+                <div key={s} style={{ display:'flex', alignItems:'center', gap:6 }}>
+                  <div style={{ width:22,height:22,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,background:step>i+1?'#1a6b3a':step===i+1?'#e85d04':'#eee',color:step>=i+1?'#fff':'#888' }}>{step>i+1?'✓':i+1}</div>
+                  <div style={{ fontSize:12,fontWeight:600,color:step===i+1?'#e85d04':step>i+1?'#1a6b3a':'#bbb' }}>{s}</div>
+                  {i<STEPS.length-1 && <div style={{ width:24,height:2,background:step>i+1?'#1a6b3a':'#eee',borderRadius:1 }}/>}
                 </div>
               ))}
-              <div style={{ background:'#f8f7f4', border:'1px solid #eee', borderRadius:10, padding:14, marginTop:8, marginBottom:14 }}>
-                <div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700, marginBottom:12 }}>+ Nueva partida</div>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:9, marginBottom:9 }}>
-                  <div><label style={lbl}>CÓDIGO</label><input style={inp} placeholder="CIM-001" value={pf.codigo} onChange={e=>setPf(f=>({...f,codigo:e.target.value}))} /></div>
-                  <div><label style={lbl}>UNIDAD</label><select style={{ ...inp, appearance:'auto' }} value={pf.unidad} onChange={e=>setPf(f=>({...f,unidad:e.target.value}))}>{['ud','m','m2','m3','kg','t','PA'].map(u=><option key={u}>{u}</option>)}</select></div>
-                </div>
-                <div style={{ marginBottom:9 }}><label style={lbl}>DESCRIPCIÓN *</label><input style={inp} placeholder="Micropilote Ø168mm L=12m" value={pf.desc} onChange={e=>setPf(f=>({...f,desc:e.target.value}))} /></div>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:9, marginBottom:10 }}>
-                  <div><label style={lbl}>MEDICIÓN *</label><input style={inp} type="number" placeholder="0" value={pf.medicion} onChange={e=>setPf(f=>({...f,medicion:e.target.value}))} /></div>
-                  <div><label style={lbl}>PRECIO SALIDA €/ud *</label><input style={inp} type="number" placeholder="0.00" value={pf.precio} onChange={e=>setPf(f=>({...f,precio:e.target.value}))} /></div>
-                </div>
-                <button onClick={addPartida} style={{ background:'#e85d04', color:'#fff', border:'none', padding:'10px 0', borderRadius:6, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700, cursor:'pointer', width:'100%' }}>
-                  + Añadir partida
-                </button>
-              </div>
-              <div>
-                <label style={lbl}>DOCUMENTACIÓN DE LA OBRA (planos, BOQs — máx. 25MB por archivo)</label>
-                <FileUploader archivos={archivos} onChange={setArchivos} maxSize={MAX_FILE_PROJ} label="Adjuntar documentación técnica" />
-              </div>
-            </>
-          )}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ width:32,height:32,borderRadius:'50%',background:'#f2f0eb',border:'1px solid #ddd',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',fontSize:20,flexShrink:0 }}>×</button>
         </div>
-        <div style={{ padding:'0 28px 24px', display:'flex', justifyContent:'flex-end', gap:10 }}>
-          {step===2 && <button onClick={()=>setStep(1)} style={{ background:'transparent', color:'#888', border:'1.5px solid #ddd', padding:'10px 16px', borderRadius:6, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, cursor:'pointer' }}>← Atrás</button>}
-          <div style={{ flex:1 }}/>
-          <button onClick={onClose} style={{ background:'transparent', color:'#888', border:'1.5px solid #ddd', padding:'10px 16px', borderRadius:6, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, cursor:'pointer' }}>Cancelar</button>
-          {step===1 && <button onClick={()=>(nombre.trim()&&fecha)&&setStep(2)} style={{ background:'#e85d04', color:'#fff', border:'none', padding:'10px 22px', borderRadius:6, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700, cursor:'pointer', opacity:(nombre.trim()&&fecha)?1:.4 }}>Siguiente →</button>}
-          {step===2 && <button onClick={publish} disabled={!partidas.length||loading} style={{ background:'#e85d04', color:'#fff', border:'none', padding:'10px 22px', borderRadius:6, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700, cursor:'pointer', opacity:partidas.length?1:.4 }}>
-            {loading?'Publicando...':'Publicar para todos'}
-          </button>}
-        </div>
+
+        {/* PASO 1 — INFO GENERAL */}
+        {step===1 && (
+          <div style={{ padding:'20px 28px 24px' }}>
+            <div style={{ marginBottom:14 }}>
+              <label style={lbl}>NOMBRE DEL PROYECTO *</label>
+              <input style={inp} placeholder="Ej: Viaducto M-50 — Cimentaciones especiales" value={nombre} onChange={e=>setNombre(e.target.value)} />
+            </div>
+            <div style={{ marginBottom:14 }}>
+              <label style={lbl}>DESCRIPCIÓN</label>
+              <textarea style={{ ...inp, resize:'vertical', minHeight:72, fontSize:13 }} placeholder="Alcance, condicionantes, maquinaria requerida..." value={desc} onChange={e=>setDesc(e.target.value)} />
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:14 }}>
+              <div><label style={lbl}>UBICACIÓN</label><input style={inp} placeholder="Ciudad / prov." value={ubic} onChange={e=>setUbic(e.target.value)} /></div>
+              <div><label style={lbl}>CIERRE DE OFERTAS *</label><input style={inp} type="date" value={fechaCierre} onChange={e=>setFechaCierre(e.target.value)} /></div>
+              <div><label style={lbl}>INICIO PREVISTO</label><input style={inp} type="date" value={fechaInicio} onChange={e=>setFechaInicio(e.target.value)} /></div>
+            </div>
+
+            {/* RESPONSABLE */}
+            <div style={{ background:'#f8f7f4', border:'1px solid #eee', borderRadius:8, padding:'14px 16px', marginBottom:14 }}>
+              <div style={{ fontFamily:'Syne,sans-serif', fontSize:12, fontWeight:700, color:'#555', marginBottom:12 }}>RESPONSABLE DE LA LICITACIÓN (opcional)</div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:9 }}>
+                <div><label style={lbl}>NOMBRE</label><input style={inp} placeholder="Nombre y apellidos" value={respNombre} onChange={e=>setRespNombre(e.target.value)} /></div>
+                <div><label style={lbl}>EMAIL DIRECTO</label><input style={inp} type="email" placeholder="responsable@obra.com" value={respEmail} onChange={e=>setRespEmail(e.target.value)} /></div>
+                <div><label style={lbl}>TELÉFONO</label><input style={inp} type="tel" placeholder="6XX XXX XXX" value={respTel} onChange={e=>setRespTel(e.target.value)} /></div>
+              </div>
+            </div>
+
+            {/* VISIBILIDAD */}
+            <div style={{ marginBottom:14 }}>
+              <label style={lbl}>VISIBILIDAD</label>
+              <div style={{ display:'flex', gap:10 }}>
+                {[['publica','Pública','Cualquier empresa puede ver y pujar'],['privada','Privada','Solo empresas que invites pueden pujar']].map(([v,l,sub])=>(
+                  <div key={v} onClick={()=>setVis(v)} style={{ flex:1, border:`2px solid ${visibilidad===v?'#e85d04':'#eee'}`, borderRadius:8, padding:'12px 14px', cursor:'pointer', background:visibilidad===v?'#fff2ec':'transparent', transition:'.15s' }}>
+                    <div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700, color:visibilidad===v?'#e85d04':'#333' }}>{visibilidad===v?'✓ ':''}{l}</div>
+                    <div style={{ fontSize:11, color:'#888', marginTop:3 }}>{sub}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {visibilidad==='privada' && (
+              <div style={{ marginBottom:14 }}>
+                <label style={lbl}>EMAILS DE EMPRESAS INVITADAS (separados por coma)</label>
+                <textarea style={{ ...inp, resize:'vertical', minHeight:56, fontSize:13 }} placeholder="empresa1@mail.com, empresa2@mail.com, ..." value={invitadas} onChange={e=>setInvitadas(e.target.value)} />
+                <div style={{ fontSize:11, color:'#888', marginTop:4 }}>Recibirán un email con el enlace directo a esta licitación</div>
+              </div>
+            )}
+
+            <div><label style={lbl}>ETIQUETAS</label><TagInput tags={tags} onChange={setTags}/></div>
+
+            <div style={{ display:'flex', justifyContent:'flex-end', gap:10, marginTop:20 }}>
+              <button onClick={onClose} style={{ background:'transparent', color:'#888', border:'1.5px solid #ddd', padding:'10px 16px', borderRadius:6, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, cursor:'pointer' }}>Cancelar</button>
+              <button onClick={()=>canNext1&&setStep(2)} style={{ background:'#e85d04', color:'#fff', border:'none', padding:'10px 22px', borderRadius:6, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700, cursor:'pointer', opacity:canNext1?1:.4 }}>Siguiente →</button>
+            </div>
+          </div>
+        )}
+
+        {/* PASO 2 — PARTIDAS */}
+        {step===2 && (
+          <div style={{ padding:'20px 28px 24px' }}>
+            {/* Toolbar importar/descargar */}
+            <div style={{ display:'flex', gap:8, marginBottom:16, flexWrap:'wrap' }}>
+              <button onClick={descargarPlantillaExcel} style={{ display:'flex', alignItems:'center', gap:5, padding:'8px 14px', border:'1.5px solid #1a6b3a', borderRadius:6, background:'#e5f4ec', color:'#1a6b3a', cursor:'pointer', fontFamily:'Syne,sans-serif', fontSize:12, fontWeight:700 }}>
+                <Ic n="file" s={13}/> Descargar plantilla CSV
+              </button>
+              <button onClick={()=>csvRef.current.click()} style={{ display:'flex', alignItems:'center', gap:5, padding:'8px 14px', border:'1.5px solid #1a4d7a', borderRadius:6, background:'#e5eef7', color:'#1a4d7a', cursor:'pointer', fontFamily:'Syne,sans-serif', fontSize:12, fontWeight:700 }}>
+                <Ic n="paperclip" s={13}/> Importar CSV relleno
+              </button>
+              <input ref={csvRef} type="file" accept=".csv" style={{ display:'none' }} onChange={e=>{ if(e.target.files[0]) importarCSV(e.target.files[0], p=>setPartidas(prev=>[...prev,...p])) }} />
+              <div style={{ fontSize:11, color:'#888', alignSelf:'center' }}>O añade las partidas manualmente abajo</div>
+            </div>
+
+            {/* Lista partidas añadidas */}
+            {partidas.map(p=>(
+              <div key={p.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 13px', background:'#fff', border:'1px solid #eee', borderRadius:6, marginBottom:6 }}>
+                <div>
+                  <div style={{ fontFamily:'JetBrains Mono,monospace', fontSize:10, color:'#888' }}>{p.codigo}</div>
+                  <div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, marginTop:1 }}>{p.descripcion}</div>
+                  <div style={{ fontSize:11, color:'#888', marginTop:1 }}>{p.medicion} {p.unidad} × {fmt(p.precioSalida)} = <strong>{fmt(p.medicion*p.precioSalida)}</strong></div>
+                </div>
+                <button onClick={()=>setPartidas(prev=>prev.filter(x=>x.id!==p.id))} style={{ background:'none', border:'none', cursor:'pointer', color:'#ccc', fontSize:20, padding:'0 4px' }}>×</button>
+              </div>
+            ))}
+
+            {/* Form añadir partida manual */}
+            <div style={{ background:'#f8f7f4', border:'1.5px dashed #ddd', borderRadius:10, padding:14, marginTop:8, marginBottom:14 }}>
+              <div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700, marginBottom:12, color:'#555' }}>+ Añadir partida manualmente</div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:9, marginBottom:9 }}>
+                <div><label style={lbl}>CÓDIGO</label><input style={inp} placeholder="CIM-001" value={pf.codigo} onChange={e=>setPf(f=>({...f,codigo:e.target.value}))} /></div>
+                <div><label style={lbl}>UNIDAD</label><select style={{ ...inp, appearance:'auto' }} value={pf.unidad} onChange={e=>setPf(f=>({...f,unidad:e.target.value}))}>{['ud','m','m2','m3','kg','t','PA'].map(u=><option key={u}>{u}</option>)}</select></div>
+              </div>
+              <div style={{ marginBottom:9 }}><label style={lbl}>DESCRIPCIÓN *</label><input style={inp} placeholder="Micropilote Ø168mm L=12m" value={pf.desc} onChange={e=>setPf(f=>({...f,desc:e.target.value}))} /></div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:9, marginBottom:10 }}>
+                <div><label style={lbl}>MEDICIÓN *</label><input style={inp} type="number" placeholder="0" value={pf.medicion} onChange={e=>setPf(f=>({...f,medicion:e.target.value}))} /></div>
+                <div><label style={lbl}>PRECIO SALIDA €/ud *</label><input style={inp} type="number" placeholder="0.00" value={pf.precio} onChange={e=>setPf(f=>({...f,precio:e.target.value}))} /></div>
+              </div>
+              <button onClick={addPartida} disabled={!pf.desc||!pf.medicion||!pf.precio} style={{ background:'#e85d04', color:'#fff', border:'none', padding:'10px 0', borderRadius:6, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700, cursor:'pointer', width:'100%', opacity:(!pf.desc||!pf.medicion||!pf.precio)?.4:1 }}>
+                + Añadir partida
+              </button>
+            </div>
+
+            {/* Archivos */}
+            <div style={{ marginBottom:6 }}>
+              <label style={lbl}>DOCUMENTACIÓN (planos, BOQs — máx. 25MB por archivo)</label>
+              <FileUploader archivos={archivos} onChange={setArchivos} maxSize={MAX_FILE_PROJ} label="Adjuntar documentación técnica" />
+            </div>
+
+            <div style={{ display:'flex', justifyContent:'flex-end', gap:10, marginTop:20 }}>
+              <button onClick={()=>setStep(1)} style={{ background:'transparent', color:'#888', border:'1.5px solid #ddd', padding:'10px 16px', borderRadius:6, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, cursor:'pointer' }}>← Atrás</button>
+              <button onClick={()=>{ if(partidas.length) setStep(3) }} style={{ background:'#e85d04', color:'#fff', border:'none', padding:'10px 22px', borderRadius:6, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700, cursor:'pointer', opacity:partidas.length?1:.4 }}>
+                Vista previa →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* PASO 3 — VISTA PREVIA */}
+        {step===3 && (
+          <VistaPrevia data={previewData} company={company} onPublish={publish} onBack={()=>setStep(2)} loading={loading} />
+        )}
       </div>
     </div>
   )
@@ -1180,28 +1400,56 @@ export default function App() {
 
   async function handleNewProject(data) {
     const proj = {
-      id:           'P'+uid(),
-      slug:         slugify(data.nombre),
-      nombre:       data.nombre,
-      empresa:      company?.name || session.user.email,
-      e_init:       (company?.name||'XX').slice(0,2).toUpperCase(),
-      e_color:      COLORS[Math.floor(Math.random()*COLORS.length)],
-      descripcion:  data.desc,
-      ubicacion:    data.ubic || 'España',
-      fecha_cierre: data.fecha,        // snake_case correcto para Supabase
-      tags:         data.tags || [],
-      estado:       'abierta',
-      partidas:     data.partidas || [],
-      views:        0,
-      user_id:      session.user.id,
-      archivos:     data.archivos || [],
-      email_contacto: data.email_contacto || ''
+      id:                  'P'+uid(),
+      slug:                slugify(data.nombre),
+      nombre:              data.nombre,
+      empresa:             company?.name || session.user.email,
+      e_init:              (company?.name||'XX').slice(0,2).toUpperCase(),
+      e_color:             COLORS[Math.floor(Math.random()*COLORS.length)],
+      descripcion:         data.desc,
+      ubicacion:           data.ubic || 'España',
+      fecha_cierre:        data.fecha,
+      fecha_inicio:        data.fechaInicio || null,
+      tags:                data.tags || [],
+      estado:              'abierta',
+      partidas:            data.partidas || [],
+      views:               0,
+      user_id:             session.user.id,
+      archivos:            data.archivos || [],
+      email_contacto:      data.email_contacto || data.responsable_email || '',
+      responsable_nombre:  data.responsable_nombre || '',
+      responsable_email:   data.responsable_email || '',
+      responsable_tel:     data.responsable_tel || '',
+      visibilidad:         data.visibilidad || 'publica',
+      empresas_invitadas:  data.invitadas || [],
     }
     const { data: inserted, error } = await supabase.from('projects').insert([proj]).select().single()
     if (error) { console.error('Error insertando proyecto:', error); showToast('Error: '+error.message); return }
-    // Añadir al estado local inmediatamente (no esperar al realtime)
     if (inserted) setProjects(prev=>[inserted,...prev])
-    showToast('Licitación publicada para todos')
+
+    // Notificar a empresas invitadas si es licitación privada
+    if (data.visibilidad === 'privada' && data.invitadas?.length) {
+      data.invitadas.forEach(email => {
+        try {
+          window.emailjs?.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+            proyecto_nombre:    proj.nombre,
+            partida_nombre:     'Licitacion privada — has sido invitado',
+            constructora_nombre: company?.name || '',
+            email_constructora: email,
+            subcontrata_nombre: email,
+            precio:             'Ver en plataforma',
+            plazo:              proj.fecha_cierre,
+            observaciones:      `Has sido invitado a pujar en "${proj.nombre}". Entra en ObraLicit para ver los detalles.`,
+            telefono_contacto:  data.responsable_tel || 'Ver plataforma'
+          }, EMAILJS_PUBLIC_KEY)
+        } catch(e){ console.warn('Email invitacion:', e) }
+      })
+    }
+
+    const msg = data.visibilidad==='privada'
+      ? `Licitacion privada publicada — ${data.invitadas?.length||0} empresa(s) notificadas`
+      : 'Licitacion publicada para todos'
+    showToast(msg)
   }
 
   async function handleOpenDetail(id) {
