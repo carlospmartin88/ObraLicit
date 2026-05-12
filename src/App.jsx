@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from './lib/supabase'
 
 // UUID del usuario administrador — ve todos los precios y conversaciones
-const ADMIN_USER_ID = 'PON-AQUI-TU-UUID'
+const ADMIN_USER_ID = '4ab86804-df35-49c6-9919-2480ae898863'
 
 // ─── CONSTANTES ───────────────────────────────────────────────────────────────
 const SPECIALTY = ['Micropilotes','Pilotes CPI','Inyecciones','Pantallas','Muros','Mejora terreno','Anclajes','Sondeos','Cimentaciones especiales']
@@ -361,7 +361,7 @@ function DetailPanel({ proj, bids, user, company, onClose, onBid }) {
   const totalRef  = (proj.partidas||[]).reduce((s,p)=>s+p.medicion*p.precioSalida,0)
   const dl        = daysLeft(proj.fecha_cierre)
   const projBids  = bids.filter(b=>b.proyecto_id===proj.id && !b.expirada)
-  const esAdmin        = user?.id === ADMIN_USER_ID
+  const esAdmin        = user?.id === ADMIN_USER_ID || company?.role === 'admin'
   const esConstructora = company?.role === 'constructora' || esAdmin
 
   function handleCopy() {
@@ -1036,25 +1036,32 @@ function ProfilePanel({ user, company, projects, bids, onClose, onOpenDetail, on
               {(company?.name||'?').slice(0,2).toUpperCase()}
             </div>
             <div>
-              <div style={{ fontFamily:'Syne,sans-serif', fontSize:22, fontWeight:800 }}>{company?.name}</div>
+              <div style={{ fontFamily:'Syne,sans-serif', fontSize:22, fontWeight:800 }}>{isAdmin ? 'Administrador ObraLicit' : company?.name}</div>
               <div style={{ fontSize:12, color:'rgba(255,255,255,.5)', marginTop:3 }}>
-                {user.id === ADMIN_USER_ID && <span style={{ background:'#e85d04', color:'#fff', padding:'1px 8px', borderRadius:4, fontSize:10, fontWeight:700, marginRight:6 }}>ADMIN</span>}
-                {company?.role} — CIF: {company?.cif||'No registrado'}
+                {isAdmin
+                  ? <><span style={{ background:'#e85d04', color:'#fff', padding:'2px 10px', borderRadius:4, fontSize:11, fontWeight:700, marginRight:6 }}>ADMIN</span>Acceso total · Ve todos los precios y conversaciones</>
+                  : <>{company?.role} — CIF: {company?.cif||'No registrado'}</>
+                }
               </div>
               <div style={{ fontSize:12, color:'rgba(255,255,255,.4)', marginTop:2 }}>{user.email}</div>
             </div>
           </div>
           <div style={{ display:'flex', gap:20, marginTop:18, flexWrap:'wrap' }}>
-            {[['Proyectos',misProyectos.length],['Pujas enviadas',misPujas.length],['Contratos ganados',adjudicadas.length]].map(([l,v])=>(
-              <div key={l}><div style={{ fontSize:10, color:'rgba(255,255,255,.35)', fontWeight:700 }}>{l.toUpperCase()}</div><div style={{ fontFamily:'JetBrains Mono,monospace', fontSize:18, fontWeight:700, color:'#fff', marginTop:2 }}>{v}</div></div>
-            ))}
+            {isAdmin
+              ? [['Total obras',projects.length],['Total pujas',bids.length],['Empresas',[...new Set(bids.map(b=>b.empresa))].length]].map(([l,v])=>(
+                  <div key={l}><div style={{ fontSize:10, color:'rgba(255,255,255,.35)', fontWeight:700 }}>{l.toUpperCase()}</div><div style={{ fontFamily:'JetBrains Mono,monospace', fontSize:18, fontWeight:700, color:'#fff', marginTop:2 }}>{v}</div></div>
+                ))
+              : [['Proyectos',misProyectos.length],['Pujas enviadas',misPujas.length],['Contratos ganados',adjudicadas.length]].map(([l,v])=>(
+                  <div key={l}><div style={{ fontSize:10, color:'rgba(255,255,255,.35)', fontWeight:700 }}>{l.toUpperCase()}</div><div style={{ fontFamily:'JetBrains Mono,monospace', fontSize:18, fontWeight:700, color:'#fff', marginTop:2 }}>{v}</div></div>
+                ))
+            }
           </div>
         </div>
 
         {/* TABS */}
         <div style={{ display:'flex', borderBottom:'1px solid #eee', background:'#f8f7f4', overflowX:'auto' }}>
-          {[['proyectos','Proyectos'],['pujas','Mis pujas'],['empresas','Directorio'],['perfil','Mi perfil']].map(([k,l])=>(
-            <button key={k} onClick={()=>setTab(k)} style={{ flex:1, minWidth:90, padding:'14px 10px', border:'none', background:'transparent', fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700, cursor:'pointer', color:tab===k?'#e85d04':'#888', borderBottom:tab===k?'2px solid #e85d04':'2px solid transparent', transition:'.15s', whiteSpace:'nowrap' }}>{l}</button>
+          {[['proyectos', isAdmin?'Todas las obras':'Proyectos'],['pujas', isAdmin?'Todas las pujas':'Mis pujas'],['empresas','Directorio'],['perfil', isAdmin?'Perfil Admin':'Mi perfil']].map(([k,l])=>(
+            <button key={k} onClick={()=>setTab(k)} style={{ flex:1, minWidth:90, padding:'14px 10px', border:'none', background:isAdmin&&tab===k?'#18170f':'transparent', fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700, cursor:'pointer', color:tab===k?(isAdmin?'#e85d04':'#e85d04'):'#888', borderBottom:tab===k?'2px solid #e85d04':'2px solid transparent', transition:'.15s', whiteSpace:'nowrap' }}>{l}</button>
           ))}
         </div>
 
@@ -1232,7 +1239,7 @@ function EmpresasDirectorio({ currentUser, onNewMsg }) {
 }
 
 // ─── PANEL MENSAJES ───────────────────────────────────────────────────────────
-function MessagesPanel({ user, company, onClose, initialTarget }) {
+function MessagesPanel({ user, company, onClose, initialTarget, isAdmin }) {
   const [mensajes, setMensajes]   = useState([])
   const [conv, setConv]           = useState(initialTarget || null) // empresa destinataria
   const [texto, setTexto]         = useState('')
@@ -1248,7 +1255,7 @@ function MessagesPanel({ user, company, onClose, initialTarget }) {
   },[])
 
   async function loadMessages() {
-    const esAdmin = user.id === ADMIN_USER_ID
+    const esAdmin = isAdmin || company?.role === 'admin'
     const query = esAdmin
       ? supabase.from('messages').select('*').order('created_at', { ascending:false })
       : supabase.from('messages').select('*').or(`from_user_id.eq.${user.id},to_user_id.eq.${user.id}`).order('created_at', { ascending:false })
@@ -1807,7 +1814,7 @@ export default function App() {
       {detailProj && <DetailPanel proj={detailProj} bids={bids} user={session?.user} company={company} onClose={()=>setDetailId(null)} onBid={handleBid}/>}
       {showNew    && <NewProjectModal company={company} session={session} onClose={()=>setShowNew(false)} onSubmit={handleNewProject}/>}
       {showProfile && <ProfilePanel user={session.user} company={company} projects={projects} bids={bids} onClose={()=>setShowProfile(false)} onOpenDetail={handleOpenDetail} onNewMsg={handleNewMsg} onCompanyUpdate={updates=>setCompany(prev=>({...prev,...updates}))} onDeleteProject={handleDeleteProject} onDeleteBid={handleDeleteBid} isAdmin={session.user.id===ADMIN_USER_ID}/>}
-      {showMsgs   && <MessagesPanel user={session.user} company={company} onClose={()=>setShowMsgs(false)} initialTarget={msgTarget}/>}
+      {showMsgs   && <MessagesPanel user={session.user} company={company} onClose={()=>setShowMsgs(false)} initialTarget={msgTarget} isAdmin={session.user.id===ADMIN_USER_ID}/>}
       {toast      && <Toast msg={toast}/>}
     </div>
   )
