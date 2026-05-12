@@ -355,15 +355,19 @@ function BidForm({ partida, onSubmit, onCancel }) {
 }
 
 // ─── PANEL DETALLE ────────────────────────────────────────────────────────────
-function DetailPanel({ proj, bids, user, company, onClose, onBid }) {
-  const [openForm, setOpenForm] = useState(null)
-  const [copied, setCopied]     = useState(false)
+function DetailPanel({ proj, bids, user, company, onClose, onBid, onDeleteBid, setProjects }) {
+  const [openForm, setOpenForm]     = useState(null)
+  const [copied, setCopied]         = useState(false)
+  const [visLocal, setVisLocal]     = useState({
+    mostrar_num_pujas: proj.mostrar_num_pujas||false,
+    mostrar_empresas:  proj.mostrar_empresas||false,
+  })
   const totalRef  = (proj.partidas||[]).reduce((s,p)=>s+p.medicion*p.precioSalida,0)
   const dl        = daysLeft(proj.fecha_cierre)
   const projBids  = bids.filter(b=>b.proyecto_id===proj.id && !b.expirada)
   const esAdmin        = user?.id === ADMIN_USER_ID || company?.role === 'admin'
   const esDuenio       = user?.id === proj.user_id
-  const esConstructora = esDuenio || esAdmin  // solo el dueño o admin ve todo
+  const esConstructora = esDuenio || esAdmin
 
   function handleCopy() {
     navigator.clipboard?.writeText?.(`${window.location.origin}/?l=${proj.slug}`)
@@ -433,15 +437,17 @@ function DetailPanel({ proj, bids, user, company, onClose, onBid }) {
               <div style={{ fontFamily:'Syne,sans-serif', fontSize:12, fontWeight:700, color:'#555', marginBottom:10 }}>CONFIGURACIÓN DE VISIBILIDAD</div>
               <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
                 {[
-                  ['mostrar_num_pujas', 'Mostrar número de ofertas recibidas', proj.mostrar_num_pujas],
-                  ['mostrar_empresas',  'Mostrar qué empresas han pujado (sin precios)', proj.mostrar_empresas],
+                  ['mostrar_num_pujas', 'Mostrar número de ofertas recibidas', visLocal.mostrar_num_pujas],
+                  ['mostrar_empresas',  'Mostrar qué empresas han pujado (sin precios)', visLocal.mostrar_empresas],
                 ].map(([campo, label, valor])=>(
                   <label key={campo} style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', fontSize:13, color:'#333' }}>
                     <input type="checkbox" checked={!!valor} onChange={async e=>{
                       const v = e.target.checked
-                      await supabase.from('projects').update({ [campo]:v }).eq('id', proj.id)
-                      setProjects(prev=>prev.map(p=>p.id===proj.id?{...p,[campo]:v}:p))
-                    }} style={{ width:16, height:16, cursor:'pointer' }}/>
+                      setVisLocal(prev=>({...prev,[campo]:v}))
+                      const { error } = await supabase.from('projects').update({ [campo]:v }).eq('id', proj.id)
+                      if (error) { setVisLocal(prev=>({...prev,[campo]:!v})); console.error(error) }
+                      else setProjects(prev=>prev.map(p=>p.id===proj.id?{...p,[campo]:v}:p))
+                    }} style={{ width:16, height:16, cursor:'pointer', accentColor:'#e85d04' }}/>
                     {label}
                   </label>
                 ))}
@@ -1099,23 +1105,29 @@ function ProfilePanel({ user, company, projects, bids, onClose, onOpenDetail, on
 
         {/* TABS */}
         <div style={{ display:'flex', borderBottom:'1px solid #eee', background:'#f8f7f4', overflowX:'auto' }}>
-          {[['proyectos', isAdmin?'Todas las obras':'Proyectos'],['pujas', isAdmin?'Todas las pujas':'Mis pujas'],['empresas','Directorio'],['seguidores','Seguidores'],['perfil', isAdmin?'Perfil Admin':'Mi perfil']].map(([k,l])=>(
-            <button key={k} onClick={()=>setTab(k)} style={{ flex:1, minWidth:80, padding:'12px 8px', border:'none', background:'transparent', fontFamily:'Syne,sans-serif', fontSize:12, fontWeight:700, cursor:'pointer', color:tab===k?'#e85d04':'#888', borderBottom:tab===k?'2px solid #e85d04':'2px solid transparent', transition:'.15s', whiteSpace:'nowrap' }}>{l}</button>
+          {[
+            ['proyectos','Proyectos'],
+            ['pujas','Mis pujas'],
+            ...(isAdmin?[['estadisticas','Panel admin']]:[ ]),
+            ['empresas','Directorio'],
+            ['seguidores','Seguidores'],
+            ['perfil', isAdmin?'Perfil Admin':'Mi perfil']
+          ].map(([k,l])=>(
+            <button key={k} onClick={()=>setTab(k)} style={{ flex:1, minWidth:70, padding:'12px 6px', border:'none', background:k==='estadisticas'&&tab===k?'#18170f':'transparent', fontFamily:'Syne,sans-serif', fontSize:11, fontWeight:700, cursor:'pointer', color:tab===k?(k==='estadisticas'?'#e85d04':'#e85d04'):'#888', borderBottom:tab===k?'2px solid #e85d04':'2px solid transparent', transition:'.15s', whiteSpace:'nowrap' }}>{l}</button>
           ))}
         </div>
 
         <div style={{ padding:'20px 28px' }}>
           {tab==='proyectos' && (
             <>
-              {isAdmin && <div style={{ padding:'8px 12px', background:'#fff2ec', border:'1px solid #ffcba4', borderRadius:6, marginBottom:14, fontSize:12, color:'#c94f03', fontWeight:600 }}>Vista ADMIN — puedes eliminar cualquier publicación</div>}
-              {(isAdmin ? projects : misProyectos).length===0
+                  {misProyectos.length===0
                 ? <div style={{ textAlign:'center', padding:'40px 20px', color:'#888' }}><div style={{ fontSize:32, marginBottom:10 }}>🏗️</div><div style={{ fontFamily:'Syne', fontWeight:700, marginBottom:6 }}>Sin proyectos publicados</div></div>
-                : (isAdmin ? projects : misProyectos).map(p=>(
+                : misProyectos.map(p=>(
                   <div key={p.id} style={{ padding:'14px 16px', border:'1px solid #eee', borderRadius:10, marginBottom:10 }}>
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8 }}>
                       <div style={{ flex:1, cursor:'pointer' }} onClick={()=>{ onOpenDetail(p.id); onClose() }}>
                         <div style={{ fontFamily:'Syne,sans-serif', fontSize:14, fontWeight:700, marginBottom:3 }}>{p.nombre}</div>
-                        {isAdmin && <div style={{ fontSize:11, color:'#888', marginBottom:3 }}>Publicado por: <strong>{p.empresa}</strong></div>}
+
                         <div style={{ fontSize:12, color:'#888' }}>{p.ubicacion} — Cierre: {p.fecha_cierre} — {bids.filter(b=>b.proyecto_id===p.id).length} oferta(s)</div>
                         <div style={{ display:'flex', gap:5, marginTop:8, flexWrap:'wrap' }}>{p.tags?.map(t=><Tag key={t} t={t}/>)}</div>
                       </div>
@@ -1134,10 +1146,9 @@ function ProfilePanel({ user, company, projects, bids, onClose, onOpenDetail, on
           )}
           {tab==='pujas' && (
             <>
-              {isAdmin && <div style={{ padding:'8px 12px', background:'#fff2ec', border:'1px solid #ffcba4', borderRadius:6, marginBottom:14, fontSize:12, color:'#c94f03', fontWeight:600 }}>Vista ADMIN — puedes eliminar cualquier puja</div>}
-              {(isAdmin ? bids : misPujas).length===0
+                  {misPujas.length===0
                 ? <div style={{ textAlign:'center', padding:'40px 20px', color:'#888' }}><div style={{ fontSize:32, marginBottom:10 }}>📋</div><div style={{ fontFamily:'Syne', fontWeight:700, marginBottom:6 }}>Sin pujas enviadas</div></div>
-                : (isAdmin ? bids : misPujas).map(b=>{
+                : misPujas.map(b=>{
                   const proj = projects.find(p=>p.id===b.proyecto_id)
                   const puedeRetirar = b.estado === 'pendiente' && !b.expirada
                   return (
@@ -1145,7 +1156,7 @@ function ProfilePanel({ user, company, projects, bids, onClose, onOpenDetail, on
                       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8 }}>
                         <div style={{ flex:1 }}>
                           <div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700 }}>{proj?.nombre||'Proyecto'}</div>
-                          {isAdmin && <div style={{ fontSize:11, color:'#888', marginTop:1 }}>Puja de: <strong>{b.empresa}</strong></div>}
+
                           <div style={{ fontSize:12, color:'#888', marginTop:3 }}>{b.fecha} — Plazo: {b.plazo}d</div>
                           {b.observaciones && <div style={{ fontSize:11, color:'#555', marginTop:3, fontStyle:'italic' }}>"{b.observaciones.slice(0,80)}{b.observaciones.length>80?'...':''}"</div>}
                           {b.validez_tipo==='fecha' && <div style={{ fontSize:11, color:'#c97a0a', marginTop:2 }}>Válida hasta: {b.validez_fecha}</div>}
@@ -1182,6 +1193,10 @@ function ProfilePanel({ user, company, projects, bids, onClose, onOpenDetail, on
 
           {tab==='seguidores' && (
             <GestionSeguidores user={user} company={company}/>
+          )}
+
+          {tab==='estadisticas' && isAdmin && (
+            <AdminEstadisticas projects={projects} bids={bids}/>
           )}
 
           {tab==='perfil' && (
@@ -1377,6 +1392,110 @@ function BotonSeguir({ currentUser, targetUser, currentCompany }) {
   return <button onClick={toggleFollow} disabled={loading} style={style}>{label}</button>
 }
 
+
+// ─── PANEL ESTADÍSTICAS ADMIN ────────────────────────────────────────────────
+function AdminEstadisticas({ projects, bids }) {
+  const [empresas, setEmpresas] = useState([])
+  const [usuarios, setUsuarios] = useState([])
+
+  useEffect(()=>{
+    supabase.from('companies').select('*').order('created_at', { ascending:false })
+      .then(({ data })=>{ if(data) setEmpresas(data) })
+  },[])
+
+  // Calculos
+  const obrasAbiertas   = projects.filter(p=>p.estado==='abierta').length
+  const obrasCerradas   = projects.filter(p=>p.estado!=='abierta').length
+  const totalBids       = bids.length
+  const bidsAdjudicadas = bids.filter(b=>b.estado==='adjudicada').length
+  const bidsExpiradas   = bids.filter(b=>b.expirada).length
+  const avgSaving       = bids.length ? (bids.reduce((s,b)=>{
+    const p = projects.flatMap(pr=>pr.partidas||[]).find(pa=>pa.id===b.partida_id)
+    return s + (p ? (p.precioSalida-b.precio)/p.precioSalida*100 : 0)
+  },0)/bids.length).toFixed(1) : '—'
+  const totalRef = projects.reduce((s,p)=>(p.partidas||[]).reduce((ss,pa)=>ss+pa.medicion*pa.precioSalida,0)+s,0)
+  const totalAdjudicado = bids.filter(b=>b.estado==='adjudicada').reduce((s,b)=>{
+    const p = projects.flatMap(pr=>pr.partidas||[]).find(pa=>pa.id===b.partida_id)
+    return s + (p ? b.precio*p.medicion : 0)
+  },0)
+
+  // Top empresas por pujas
+  const porEmpresa = bids.reduce((acc,b)=>{ acc[b.empresa]=(acc[b.empresa]||0)+1; return acc },{})
+  const topEmpresas = Object.entries(porEmpresa).sort(([,a],[,b])=>b-a).slice(0,5)
+
+  // Obras más activas
+  const porObra = projects.map(p=>({ nombre:p.nombre, empresa:p.empresa, pujas:bids.filter(b=>b.proyecto_id===p.id).length })).sort((a,b)=>b.pujas-a.pujas).slice(0,5)
+
+  const card = (titulo, valor, color='#18170f', sub='') => (
+    <div style={{ background:'#fff', border:'1px solid #eee', borderRadius:10, padding:'14px 16px', flex:1, minWidth:130 }}>
+      <div style={{ fontFamily:'Syne,sans-serif', fontSize:11, fontWeight:700, color:'#888', marginBottom:6 }}>{titulo}</div>
+      <div style={{ fontFamily:'JetBrains Mono,monospace', fontSize:22, fontWeight:700, color }}>{valor}</div>
+      {sub && <div style={{ fontSize:11, color:'#888', marginTop:4 }}>{sub}</div>}
+    </div>
+  )
+
+  return (
+    <div>
+      <div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700, color:'#888', marginBottom:14 }}>RESUMEN PLATAFORMA</div>
+
+      <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:20 }}>
+        {card('OBRAS ABIERTAS',    obrasAbiertas,   '#1a6b3a')}
+        {card('OBRAS CERRADAS',    obrasCerradas,   '#888')}
+        {card('EMPRESAS',          empresas.length, '#1a4d7a')}
+        {card('OFERTAS TOTALES',   totalBids,       '#18170f')}
+        {card('ADJUDICADAS',       bidsAdjudicadas, '#1a6b3a')}
+        {card('AHORRO MEDIO',      avgSaving!=='—'?`-${avgSaving}%`:'—', '#1a6b3a')}
+      </div>
+
+      <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:20 }}>
+        {card('PRESUPUESTO TOTAL REF.', fmt(totalRef),        '#e85d04', 'suma de todas las obras')}
+        {card('VALOR ADJUDICADO',       fmt(totalAdjudicado), '#1a6b3a', 'contratado en plataforma')}
+        {card('OFERTAS EXPIRADAS',      bidsExpiradas,        '#888')}
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:20 }}>
+        <div style={{ background:'#fff', border:'1px solid #eee', borderRadius:10, padding:'14px 16px' }}>
+          <div style={{ fontFamily:'Syne,sans-serif', fontSize:11, fontWeight:700, color:'#888', marginBottom:12 }}>TOP EMPRESAS PUJADORAS</div>
+          {topEmpresas.map(([emp,n],i)=>(
+            <div key={emp} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'7px 0', borderBottom:i<topEmpresas.length-1?'1px solid #f0f0f0':'none' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <div style={{ width:20, height:20, borderRadius:'50%', background:['#e85d04','#1a4d7a','#1a6b3a','#5a3fa0','#888'][i], color:'#fff', fontSize:10, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center' }}>{i+1}</div>
+                <span style={{ fontSize:13, fontWeight:600 }}>{emp}</span>
+              </div>
+              <span style={{ fontFamily:'JetBrains Mono,monospace', fontSize:13 }}>{n} pujas</span>
+            </div>
+          ))}
+        </div>
+        <div style={{ background:'#fff', border:'1px solid #eee', borderRadius:10, padding:'14px 16px' }}>
+          <div style={{ fontFamily:'Syne,sans-serif', fontSize:11, fontWeight:700, color:'#888', marginBottom:12 }}>OBRAS MÁS ACTIVAS</div>
+          {porObra.map((o,i)=>(
+            <div key={o.nombre} style={{ padding:'7px 0', borderBottom:i<porObra.length-1?'1px solid #f0f0f0':'none' }}>
+              <div style={{ display:'flex', justifyContent:'space-between' }}>
+                <div style={{ fontSize:12, fontWeight:600, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginRight:8 }}>{o.nombre}</div>
+                <span style={{ fontFamily:'JetBrains Mono,monospace', fontSize:12, flexShrink:0 }}>{o.pujas} ofertas</span>
+              </div>
+              <div style={{ fontSize:11, color:'#888' }}>{o.empresa}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ background:'#fff', border:'1px solid #eee', borderRadius:10, padding:'14px 16px' }}>
+        <div style={{ fontFamily:'Syne,sans-serif', fontSize:11, fontWeight:700, color:'#888', marginBottom:12 }}>ÚLTIMAS EMPRESAS REGISTRADAS</div>
+        {empresas.slice(0,8).map(e=>(
+          <div key={e.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'7px 0', borderBottom:'1px solid #f5f5f5' }}>
+            <div>
+              <span style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700 }}>{e.name}</span>
+              <span style={{ fontSize:11, color:'#888', marginLeft:8 }}>{e.role}</span>
+              {e.cif && <span style={{ fontSize:11, color:'#888', marginLeft:8 }}>CIF: {e.cif}</span>}
+            </div>
+            <div style={{ fontSize:11, color:'#888' }}>{new Date(e.created_at).toLocaleDateString('es-ES')}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 // ─── GESTIÓN SEGUIDORES ──────────────────────────────────────────────────────
 function GestionSeguidores({ user, company }) {
@@ -1817,13 +1936,14 @@ export default function App() {
 
     // Notificar al publicador de la obra
     if (proj.user_id && proj.user_id !== session.user.id) {
-      supabase.from('notifications').insert([{
+      const notifResult = await supabase.from('notifications').insert([{
         user_id: proj.user_id,
         tipo:    'puja',
-        titulo:  `Nueva oferta en "${proj.nombre}"`,
-        mensaje: `${company?.name || 'Una empresa'} ha presentado oferta para "${partida.descripcion}".`,
-        data:    { proyecto_id: proj.id }
-      }]).catch(()=>{})
+        titulo:  `Nueva oferta en tu obra`,
+        mensaje: `${company?.name || 'Una empresa'} ha presentado oferta en "${proj.nombre}" — partida: ${partida.descripcion}.`,
+        data:    JSON.stringify({ proyecto_id: proj.id })
+      }])
+      if (notifResult.error) console.warn('Notif puja error:', notifResult.error)
     }
 
     // Email
@@ -2142,7 +2262,7 @@ export default function App() {
       </div>
 
       {/* PANELES Y MODALES */}
-      {detailProj && <DetailPanel proj={detailProj} bids={bids} user={session?.user} company={company} onClose={()=>setDetailId(null)} onBid={handleBid}/>}
+      {detailProj && <DetailPanel proj={detailProj} bids={bids} user={session?.user} company={company} onClose={()=>setDetailId(null)} onBid={handleBid} onDeleteBid={handleDeleteBid} setProjects={setProjects}/>}
       {showNew    && <NewProjectModal company={company} session={session} onClose={()=>setShowNew(false)} onSubmit={handleNewProject}/>}
       {showProfile && <ProfilePanel user={session.user} company={company} projects={projects} bids={bids} onClose={()=>setShowProfile(false)} onOpenDetail={handleOpenDetail} onNewMsg={handleNewMsg} onCompanyUpdate={updates=>setCompany(prev=>({...prev,...updates}))} onDeleteProject={handleDeleteProject} onDeleteBid={handleDeleteBid} isAdmin={session.user.id===ADMIN_USER_ID}/>}
       {showNotifs && <NotifPanel user={session.user} onClose={()=>{ setShowNotifs(false); setNoLeidosNotif(0) }}/>}
