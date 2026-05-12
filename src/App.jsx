@@ -362,7 +362,8 @@ function DetailPanel({ proj, bids, user, company, onClose, onBid }) {
   const dl        = daysLeft(proj.fecha_cierre)
   const projBids  = bids.filter(b=>b.proyecto_id===proj.id && !b.expirada)
   const esAdmin        = user?.id === ADMIN_USER_ID || company?.role === 'admin'
-  const esConstructora = company?.role === 'constructora' || esAdmin
+  const esDuenio       = user?.id === proj.user_id
+  const esConstructora = esDuenio || esAdmin  // solo el dueño o admin ve todo
 
   function handleCopy() {
     navigator.clipboard?.writeText?.(`${window.location.origin}/?l=${proj.slug}`)
@@ -415,7 +416,9 @@ function DetailPanel({ proj, bids, user, company, onClose, onBid }) {
           </div>
           {/* KPIs */}
           <div style={{ display:'flex', gap:20, marginTop:14, flexWrap:'wrap' }}>
-            {[['Presupuesto',fmt(totalRef)],['Partidas',(proj.partidas||[]).length],['Ofertas',projBids.length],['Cierre',proj.fecha_cierre]].map(([l,v])=>(
+            {[['Presupuesto',fmt(totalRef)],['Partidas',(proj.partidas||[]).length],
+              ...(esConstructora?[['Ofertas',projBids.length]]:[]),
+              ['Cierre',proj.fecha_cierre]].map(([l,v])=>(
               <div key={l}><div style={{ fontSize:10, color:'rgba(255,255,255,.35)', fontWeight:700 }}>{l}</div><div style={{ fontFamily:'JetBrains Mono,monospace', fontSize:14, fontWeight:600, color:'#fff', marginTop:2 }}>{v}</div></div>
             ))}
           </div>
@@ -423,6 +426,30 @@ function DetailPanel({ proj, bids, user, company, onClose, onBid }) {
 
         {/* BODY */}
         <div style={{ padding:'22px 28px' }}>
+
+          {/* CONFIGURACIÓN VISIBILIDAD — solo para el dueño */}
+          {esDuenio && (
+            <div style={{ background:'#f8f7f4', border:'1px solid #eee', borderRadius:8, padding:'12px 16px', marginBottom:16 }}>
+              <div style={{ fontFamily:'Syne,sans-serif', fontSize:12, fontWeight:700, color:'#555', marginBottom:10 }}>CONFIGURACIÓN DE VISIBILIDAD</div>
+              <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
+                {[
+                  ['mostrar_num_pujas', 'Mostrar número de ofertas recibidas', proj.mostrar_num_pujas],
+                  ['mostrar_empresas',  'Mostrar qué empresas han pujado (sin precios)', proj.mostrar_empresas],
+                ].map(([campo, label, valor])=>(
+                  <label key={campo} style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', fontSize:13, color:'#333' }}>
+                    <input type="checkbox" checked={!!valor} onChange={async e=>{
+                      const v = e.target.checked
+                      await supabase.from('projects').update({ [campo]:v }).eq('id', proj.id)
+                      setProjects(prev=>prev.map(p=>p.id===proj.id?{...p,[campo]:v}:p))
+                    }} style={{ width:16, height:16, cursor:'pointer' }}/>
+                    {label}
+                  </label>
+                ))}
+              </div>
+              <div style={{ fontSize:11, color:'#888', marginTop:8 }}>El precio de las ofertas nunca es público. Solo tú lo ves.</div>
+            </div>
+          )}
+
           {/* AVISO PUJA CIEGA */}
           {!esConstructora && (
             <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 14px', background:'#f0ecff', border:'1px solid #d4c8ff', borderRadius:8, marginBottom:16, fontSize:13, color:'#5a3fa0' }}>
@@ -473,6 +500,18 @@ function DetailPanel({ proj, bids, user, company, onClose, onBid }) {
                 {isOpen && user && <BidForm partida={partida} onSubmit={f=>{ onBid(proj,partida,f); setOpenForm(null) }} onCancel={()=>setOpenForm(null)}/>}
 
                 {/* LISTA DE PUJAS */}
+                {/* Info publica si el dueño lo permite */}
+                {!esConstructora && proj.mostrar_empresas && pBids.length>0 && (
+                  <div style={{ padding:'10px 16px', background:'#f8f7f4', borderBottom:'1px solid #eee' }}>
+                    <div style={{ fontSize:11, color:'#888', fontWeight:700, marginBottom:6 }}>EMPRESAS QUE HAN PRESENTADO OFERTA</div>
+                    <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                      {pBids.map(b=>(
+                        <span key={b.id} style={{ fontSize:12, padding:'3px 9px', background:'#fff', border:'1px solid #eee', borderRadius:4 }}>{b.empresa}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {pBids.length > 0 ? pBids.map((bid,idx)=>{
                   const saving = ((partida.precioSalida-bid.precio)/partida.precioSalida*100).toFixed(1)
                   const rkCol  = idx===0?'#1a6b3a':idx===1?'#c97a0a':'#888'
@@ -1060,8 +1099,8 @@ function ProfilePanel({ user, company, projects, bids, onClose, onOpenDetail, on
 
         {/* TABS */}
         <div style={{ display:'flex', borderBottom:'1px solid #eee', background:'#f8f7f4', overflowX:'auto' }}>
-          {[['proyectos', isAdmin?'Todas las obras':'Proyectos'],['pujas', isAdmin?'Todas las pujas':'Mis pujas'],['empresas','Directorio'],['perfil', isAdmin?'Perfil Admin':'Mi perfil']].map(([k,l])=>(
-            <button key={k} onClick={()=>setTab(k)} style={{ flex:1, minWidth:90, padding:'14px 10px', border:'none', background:isAdmin&&tab===k?'#18170f':'transparent', fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700, cursor:'pointer', color:tab===k?(isAdmin?'#e85d04':'#e85d04'):'#888', borderBottom:tab===k?'2px solid #e85d04':'2px solid transparent', transition:'.15s', whiteSpace:'nowrap' }}>{l}</button>
+          {[['proyectos', isAdmin?'Todas las obras':'Proyectos'],['pujas', isAdmin?'Todas las pujas':'Mis pujas'],['empresas','Directorio'],['seguidores','Seguidores'],['perfil', isAdmin?'Perfil Admin':'Mi perfil']].map(([k,l])=>(
+            <button key={k} onClick={()=>setTab(k)} style={{ flex:1, minWidth:80, padding:'12px 8px', border:'none', background:'transparent', fontFamily:'Syne,sans-serif', fontSize:12, fontWeight:700, cursor:'pointer', color:tab===k?'#e85d04':'#888', borderBottom:tab===k?'2px solid #e85d04':'2px solid transparent', transition:'.15s', whiteSpace:'nowrap' }}>{l}</button>
           ))}
         </div>
 
@@ -1138,7 +1177,11 @@ function ProfilePanel({ user, company, projects, bids, onClose, onOpenDetail, on
             </>
           )}
           {tab==='empresas' && (
-            <EmpresasDirectorio currentUser={user} onNewMsg={onNewMsg}/>
+            <EmpresasDirectorio currentUser={user} currentCompany={company} onNewMsg={onNewMsg}/>
+          )}
+
+          {tab==='seguidores' && (
+            <GestionSeguidores user={user} company={company}/>
           )}
 
           {tab==='perfil' && (
@@ -1211,8 +1254,231 @@ function ProfilePanel({ user, company, projects, bids, onClose, onOpenDetail, on
   )
 }
 
+
+// ─── PANEL NOTIFICACIONES ─────────────────────────────────────────────────────
+function NotifPanel({ user, onClose }) {
+  const [notifs, setNotifs] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(()=>{
+    supabase.from('notifications').select('*').eq('user_id', user.id)
+      .order('created_at', { ascending:false }).limit(50)
+      .then(({ data })=>{ if(data) setNotifs(data); setLoading(false) })
+
+    const ch = supabase.channel('notifs-panel')
+      .on('postgres_changes',{ event:'INSERT', schema:'public', table:'notifications' }, payload=>{
+        if(payload.new.user_id===user.id) setNotifs(prev=>[payload.new,...prev])
+      }).subscribe()
+    return ()=>supabase.removeChannel(ch)
+  },[])
+
+  async function marcarTodas() {
+    await supabase.from('notifications').update({ leida:true }).eq('user_id', user.id).eq('leida', false)
+    setNotifs(prev=>prev.map(n=>({...n, leida:true})))
+  }
+
+  const iconoTipo = t => t==='puja'?'💶':t==='seguidor'?'👥':t==='seguimiento'?'🔔':t==='obra'?'🏗️':'📢'
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:200, background:'rgba(0,0,0,.5)', backdropFilter:'blur(5px)', display:'flex' }}
+      onClick={e=>{ if(e.target===e.currentTarget) onClose() }}>
+      <div style={{ marginLeft:'auto', width:'min(480px,100vw)', background:'#fff', height:'100vh', overflowY:'auto', boxShadow:'0 0 60px rgba(0,0,0,.2)', display:'flex', flexDirection:'column' }}>
+        <div style={{ background:'#18170f', color:'#fff', padding:'24px 28px 20px', flexShrink:0 }}>
+          <button onClick={onClose} style={{ display:'flex', alignItems:'center', gap:5, fontSize:12, color:'rgba(255,255,255,.4)', cursor:'pointer', marginBottom:14, border:'none', background:'none' }}>
+            <Ic n="back" s={13}/> Volver
+          </button>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <div style={{ fontFamily:'Syne,sans-serif', fontSize:20, fontWeight:800 }}>Notificaciones</div>
+            {notifs.some(n=>!n.leida) && (
+              <button onClick={marcarTodas} style={{ fontSize:11, fontWeight:700, color:'rgba(255,255,255,.5)', background:'rgba(255,255,255,.08)', border:'1px solid rgba(255,255,255,.12)', borderRadius:5, padding:'4px 10px', cursor:'pointer', fontFamily:'Syne,sans-serif' }}>
+                Marcar todas leídas
+              </button>
+            )}
+          </div>
+        </div>
+        <div style={{ flex:1, overflowY:'auto' }}>
+          {loading && <div style={{ padding:20, color:'#888', textAlign:'center' }}>Cargando...</div>}
+          {!loading && notifs.length===0 && (
+            <div style={{ textAlign:'center', padding:'40px 20px', color:'#888' }}>
+              <div style={{ fontSize:36, marginBottom:10 }}>🔔</div>
+              <div style={{ fontFamily:'Syne,sans-serif', fontWeight:700 }}>Sin notificaciones</div>
+            </div>
+          )}
+          {notifs.map(n=>(
+            <div key={n.id} style={{ padding:'14px 20px', borderBottom:'1px solid #eee', background:n.leida?'#fff':'#fef9f5', cursor:'default' }}
+              onClick={async ()=>{ if(!n.leida){ await supabase.from('notifications').update({ leida:true }).eq('id',n.id); setNotifs(prev=>prev.map(x=>x.id===n.id?{...x,leida:true}:x)) } }}>
+              <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
+                <div style={{ fontSize:20, flexShrink:0 }}>{iconoTipo(n.tipo)}</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700, marginBottom:2 }}>{n.titulo}</div>
+                  {n.mensaje && <div style={{ fontSize:12, color:'#555', lineHeight:1.5 }}>{n.mensaje}</div>}
+                  <div style={{ fontSize:11, color:'#aaa', marginTop:5 }}>{new Date(n.created_at).toLocaleString('es-ES',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+                </div>
+                {!n.leida && <div style={{ width:8, height:8, borderRadius:'50%', background:'#e85d04', flexShrink:0, marginTop:4 }}/>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── BOTÓN SEGUIR EMPRESA ─────────────────────────────────────────────────────
+function BotonSeguir({ currentUser, targetUser, currentCompany }) {
+  const [estado, setEstado] = useState(null) // null=no sigue, pendiente, confirmado
+  const [loading, setLoading] = useState(false)
+
+  useEffect(()=>{
+    if (!currentUser || !targetUser) return
+    supabase.from('follows').select('estado').eq('follower_id', currentUser.id).eq('following_id', targetUser.id).maybeSingle()
+      .then(({ data })=>{ if(data) setEstado(data.estado) })
+  },[currentUser?.id, targetUser?.id])
+
+  async function toggleFollow() {
+    if (!currentUser) return
+    setLoading(true)
+    if (estado) {
+      // Dejar de seguir
+      await supabase.from('follows').delete().eq('follower_id', currentUser.id).eq('following_id', targetUser.id)
+      setEstado(null)
+    } else {
+      // Solicitar seguir
+      await supabase.from('follows').insert([{
+        follower_id:    currentUser.id,
+        following_id:   targetUser.id,
+        follower_name:  currentCompany?.name || currentUser.email,
+        following_name: targetUser.name,
+        estado:         'pendiente'
+      }])
+      // Notificar a la empresa seguida
+      await supabase.from('notifications').insert([{
+        user_id: targetUser.id,
+        tipo:    'seguidor',
+        titulo:  `${currentCompany?.name || 'Una empresa'} quiere seguirte`,
+        mensaje: `Ha solicitado seguir tus publicaciones. Acepta o rechaza desde tu perfil → Seguidores.`,
+        data:    { follower_id: currentUser.id, follower_name: currentCompany?.name }
+      }])
+      setEstado('pendiente')
+    }
+    setLoading(false)
+  }
+
+  const label = estado==='confirmado'?'Siguiendo':estado==='pendiente'?'Solicitud enviada':'+ Seguir'
+  const style = {
+    padding:'6px 14px', borderRadius:6, fontFamily:'Syne,sans-serif', fontSize:12, fontWeight:700,
+    cursor:'pointer', border:'none', transition:'.15s',
+    background: estado==='confirmado'?'#e5f4ec': estado==='pendiente'?'#f0f0f0':'#f0ecff',
+    color:       estado==='confirmado'?'#1a6b3a': estado==='pendiente'?'#888':'#5a3fa0',
+    opacity:     loading?.6:1
+  }
+
+  if (currentUser?.id === targetUser?.id) return null
+  return <button onClick={toggleFollow} disabled={loading} style={style}>{label}</button>
+}
+
+
+// ─── GESTIÓN SEGUIDORES ──────────────────────────────────────────────────────
+function GestionSeguidores({ user, company }) {
+  const [pendientes, setPendientes] = useState([])
+  const [siguiendo,  setSiguiendo]  = useState([])
+  const [seguidores, setSeguidores] = useState([])
+
+  useEffect(()=>{
+    // Solicitudes pendientes que me han hecho a mí
+    supabase.from('follows').select('*').eq('following_id', user.id).eq('estado','pendiente')
+      .then(({ data })=>{ if(data) setPendientes(data) })
+    // A quién estoy siguiendo
+    supabase.from('follows').select('*').eq('follower_id', user.id)
+      .then(({ data })=>{ if(data) setSiguiendo(data) })
+    // Quién me sigue (confirmados)
+    supabase.from('follows').select('*').eq('following_id', user.id).eq('estado','confirmado')
+      .then(({ data })=>{ if(data) setSeguidores(data) })
+  },[user.id])
+
+  async function responder(id, follower_id, follower_name, aceptar) {
+    if (aceptar) {
+      await supabase.from('follows').update({ estado:'confirmado' }).eq('id', id)
+      // Notificar al que solicitó
+      await supabase.from('notifications').insert([{
+        user_id: follower_id, tipo:'seguimiento',
+        titulo:  `${company?.name||'Una empresa'} ha aceptado tu solicitud`,
+        mensaje: `Ahora recibirás notificaciones cuando publiquen nuevas obras.`,
+        data:    { following_id: user.id }
+      }]).catch(()=>{})
+      setPendientes(prev=>prev.filter(f=>f.id!==id))
+      setSeguidores(prev=>[...prev,{ id, follower_id, follower_name, estado:'confirmado' }])
+    } else {
+      await supabase.from('follows').delete().eq('id', id)
+      setPendientes(prev=>prev.filter(f=>f.id!==id))
+    }
+  }
+
+  async function dejarDeSeguir(id) {
+    await supabase.from('follows').delete().eq('id', id)
+    setSiguiendo(prev=>prev.filter(f=>f.id!==id))
+  }
+
+  const seccStyle = { fontFamily:'Syne,sans-serif', fontSize:11, fontWeight:700, color:'#888', marginBottom:10, marginTop:18 }
+
+  return (
+    <div>
+      {pendientes.length>0 && <>
+        <div style={seccStyle}>SOLICITUDES PENDIENTES ({pendientes.length})</div>
+        {pendientes.map(f=>(
+          <div key={f.id} style={{ padding:'12px 14px', border:'1.5px solid #ffcba4', borderRadius:8, marginBottom:8, background:'#fff9f5', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <div>
+              <div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700 }}>{f.follower_name||'Empresa'}</div>
+              <div style={{ fontSize:11, color:'#888', marginTop:2 }}>Quiere seguir tus publicaciones</div>
+            </div>
+            <div style={{ display:'flex', gap:6 }}>
+              <button onClick={()=>responder(f.id, f.follower_id, f.follower_name, true)}
+                style={{ padding:'6px 14px', background:'#e5f4ec', border:'1px solid #b8ddc8', borderRadius:5, color:'#1a6b3a', fontFamily:'Syne,sans-serif', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                Aceptar
+              </button>
+              <button onClick={()=>responder(f.id, f.follower_id, f.follower_name, false)}
+                style={{ padding:'6px 14px', background:'#fdecea', border:'1px solid #f5c6c2', borderRadius:5, color:'#c0392b', fontFamily:'Syne,sans-serif', fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                Rechazar
+              </button>
+            </div>
+          </div>
+        ))}
+      </>}
+
+      <div style={seccStyle}>ESTOY SIGUIENDO ({siguiendo.length})</div>
+      {siguiendo.length===0
+        ? <div style={{ fontSize:13, color:'#888', fontStyle:'italic' }}>No sigues a ninguna empresa todavía. Búscalas en el Directorio.</div>
+        : siguiendo.map(f=>(
+          <div key={f.id} style={{ padding:'11px 14px', border:'1px solid #eee', borderRadius:8, marginBottom:6, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <div>
+              <div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700 }}>{f.following_name||'Empresa'}</div>
+              <div style={{ fontSize:11, marginTop:2, color:f.estado==='confirmado'?'#1a6b3a':'#c97a0a', fontWeight:600 }}>
+                {f.estado==='confirmado'?'Confirmado — recibes notificaciones':'Pendiente de aceptación'}
+              </div>
+            </div>
+            <button onClick={()=>dejarDeSeguir(f.id)}
+              style={{ fontSize:11, padding:'4px 10px', background:'#f0f0f0', border:'1px solid #ddd', borderRadius:4, cursor:'pointer', fontFamily:'Syne,sans-serif', color:'#888' }}>
+              Dejar de seguir
+            </button>
+          </div>
+        ))
+      }
+
+      <div style={seccStyle}>ME SIGUEN ({seguidores.length})</div>
+      {seguidores.length===0
+        ? <div style={{ fontSize:13, color:'#888', fontStyle:'italic' }}>Nadie te sigue todavía.</div>
+        : seguidores.map(f=>(
+          <div key={f.id} style={{ padding:'11px 14px', border:'1px solid #eee', borderRadius:8, marginBottom:6 }}>
+            <div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700 }}>{f.follower_name||'Empresa'}</div>
+          </div>
+        ))
+      }
+    </div>
+  )
+}
+
 // ─── DIRECTORIO EMPRESAS ──────────────────────────────────────────────────────
-function EmpresasDirectorio({ currentUser, onNewMsg }) {
+function EmpresasDirectorio({ currentUser, currentCompany, onNewMsg }) {
   const [empresas, setEmpresas] = useState([])
   useEffect(()=>{
     supabase.from('companies').select('*').order('name').then(({ data })=>{ if(data) setEmpresas(data) })
@@ -1221,17 +1487,22 @@ function EmpresasDirectorio({ currentUser, onNewMsg }) {
     <div>
       <div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700, color:'#888', marginBottom:14 }}>EMPRESAS REGISTRADAS</div>
       {empresas.filter(e=>e.id!==currentUser.id).map(e=>(
-        <div key={e.id} style={{ padding:'12px 14px', border:'1px solid #eee', borderRadius:8, marginBottom:8, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-            <div style={{ width:36, height:36, borderRadius:8, background:'#e85d04', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:800, color:'#fff', fontFamily:'Syne' }}>{e.name.slice(0,2).toUpperCase()}</div>
-            <div>
-              <div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700 }}>{e.name}</div>
-              <div style={{ fontSize:11, color:'#888', marginTop:1 }}>{e.role} {e.cif?`— CIF: ${e.cif}`:''}</div>
+        <div key={e.id} style={{ padding:'12px 14px', border:'1px solid #eee', borderRadius:8, marginBottom:8 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ width:36, height:36, borderRadius:8, background:'#e85d04', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:800, color:'#fff', fontFamily:'Syne' }}>{e.name.slice(0,2).toUpperCase()}</div>
+              <div>
+                <div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700 }}>{e.name}</div>
+                <div style={{ fontSize:11, color:'#888', marginTop:1 }}>{e.role} {e.cif?`— CIF: ${e.cif}`:''}</div>
+              </div>
+            </div>
+            <div style={{ display:'flex', gap:6 }}>
+              <BotonSeguir currentUser={currentUser} targetUser={e} currentCompany={currentCompany}/>
+              <button onClick={()=>onNewMsg(e)} style={{ display:'flex', alignItems:'center', gap:5, padding:'7px 14px', background:'#f0ecff', border:'1px solid #d4c8ff', borderRadius:6, color:'#5a3fa0', cursor:'pointer', fontSize:12, fontWeight:600, fontFamily:'Syne' }}>
+                <Ic n="msg" s={13}/> Mensaje
+              </button>
             </div>
           </div>
-          <button onClick={()=>onNewMsg(e)} style={{ display:'flex', alignItems:'center', gap:5, padding:'7px 14px', background:'#f0ecff', border:'1px solid #d4c8ff', borderRadius:6, color:'#5a3fa0', cursor:'pointer', fontSize:12, fontWeight:600, fontFamily:'Syne' }}>
-            <Ic n="msg" s={13}/> Mensaje
-          </button>
         </div>
       ))}
     </div>
@@ -1384,6 +1655,8 @@ export default function App() {
   const [msgTarget,   setMsgTarget]   = useState(null)
   const [toast,       setToast]       = useState(null)
   const [noLeidos,    setNoLeidos]    = useState(0)
+  const [showNotifs,  setShowNotifs]  = useState(false)
+  const [noLeidosNotif, setNoLeidosNotif] = useState(0)
 
   const showToast = useCallback(msg=>{ setToast(msg); setTimeout(()=>setToast(null),2100) },[])
 
@@ -1470,6 +1743,22 @@ export default function App() {
     return ()=>supabase.removeChannel(ch)
   },[])
 
+  // ── NOTIFICACIONES NO LEÍDAS ────────────────────────────────────────────────
+  useEffect(()=>{
+    if (!session) return
+    const loadNotifCount = () => {
+      supabase.from('notifications').select('id', { count:'exact', head:true })
+        .eq('user_id', session.user.id).eq('leida', false)
+        .then(({ count })=>setNoLeidosNotif(count||0))
+    }
+    loadNotifCount()
+    const ch = supabase.channel('notif-count')
+      .on('postgres_changes',{ event:'INSERT', schema:'public', table:'notifications' }, payload=>{
+        if(payload.new.user_id===session.user.id) setNoLeidosNotif(n=>n+1)
+      }).subscribe()
+    return ()=>supabase.removeChannel(ch)
+  },[session])
+
   // ── MENSAJES NO LEÍDOS ────────────────────────────────────────────────────────
   useEffect(()=>{
     if (!session) return
@@ -1525,6 +1814,18 @@ export default function App() {
     }
     const { error } = await supabase.from('bids').insert([bidData])
     if (error) { showToast('Error: '+error.message); return }
+
+    // Notificar al publicador de la obra
+    if (proj.user_id && proj.user_id !== session.user.id) {
+      supabase.from('notifications').insert([{
+        user_id: proj.user_id,
+        tipo:    'puja',
+        titulo:  `Nueva oferta en "${proj.nombre}"`,
+        mensaje: `${company?.name || 'Una empresa'} ha presentado oferta para "${partida.descripcion}".`,
+        data:    { proyecto_id: proj.id }
+      }]).catch(()=>{})
+    }
+
     // Email
     try {
       window.emailjs?.send(EMAILJS_SERVICE_ID,EMAILJS_TEMPLATE_ID,{
@@ -1589,6 +1890,22 @@ export default function App() {
       ? `Obra privada publicada — ${data.invitadas?.length||0} empresa(s) notificadas`
       : 'Obra publicada para todos'
     showToast(msg)
+
+    // Notificar a seguidores confirmados
+    if (inserted) {
+      supabase.from('follows').select('follower_id')
+        .eq('following_id', session.user.id).eq('estado', 'confirmado')
+        .then(({ data: segs })=>{
+          if (segs?.length) {
+            supabase.from('notifications').insert(segs.map(s=>({
+              user_id: s.follower_id, tipo:'obra',
+              titulo:  `${company?.name||'Una empresa'} ha publicado una nueva obra`,
+              mensaje: `"${inserted.nombre}" — ${inserted.ubicacion || 'España'}`,
+              data:    { proyecto_id: inserted.id }
+            }))).catch(()=>{})
+          }
+        }).catch(()=>{})
+    }
   }
 
   async function handleDeleteProject(id) {
@@ -1667,6 +1984,11 @@ export default function App() {
             />
           </div>
           <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8 }}>
+            {/* Notificaciones */}
+            <button onClick={()=>setShowNotifs(true)} style={{ position:'relative', display:'flex', alignItems:'center', gap:5, padding:'8px 12px', borderRadius:22, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, cursor:'pointer', background:'transparent', color:'#555', border:'1.5px solid #eee' }}>
+              🔔
+              {noLeidosNotif>0 && <span style={{ position:'absolute', top:2, right:2, width:16, height:16, borderRadius:'50%', background:'#e85d04', color:'#fff', fontSize:9, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center' }}>{noLeidosNotif}</span>}
+            </button>
             {/* Mensajes */}
             <button onClick={()=>setShowMsgs(true)} style={{ position:'relative', display:'flex', alignItems:'center', gap:5, padding:'8px 12px', borderRadius:22, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, cursor:'pointer', background:'transparent', color:'#555', border:'1.5px solid #eee' }}>
               <Ic n="msg" s={15}/>
@@ -1783,7 +2105,9 @@ export default function App() {
                   </div>
                   {/* Stats bar */}
                   <div style={{ display:'flex', background:'#f8f7f4', borderTop:'1px solid #eee', borderBottom:'1px solid #eee' }}>
-                    {[['PARTIDAS',(proj.partidas||[]).length,''],['PRESUP. REF.',fmt(totalRef),'#e85d04'],['OFERTAS',projBids.length,''],['VISITAS',proj.views||0,'']].map(([l,v,c],idx,arr)=>(
+                    {[['PARTIDAS',(proj.partidas||[]).length,''],['PRESUP. REF.',fmt(totalRef),'#e85d04'],
+                      ...((proj.user_id===session?.user?.id||session?.user?.id===ADMIN_USER_ID||proj.mostrar_num_pujas)?[['OFERTAS',projBids.length,'']]:[] ),
+                      ['VISITAS',proj.views||0,'']].map(([l,v,c],idx,arr)=>(
                       <div key={l} style={{ flex:1, padding:'10px 14px', borderRight:idx<arr.length-1?'1px solid #eee':'none' }}>
                         <div style={{ fontFamily:'JetBrains Mono,monospace', fontSize:14, fontWeight:500, color:c||'#18170f' }}>{v}</div>
                         <div style={{ fontSize:10, color:'#888', fontWeight:700, letterSpacing:'.04em', marginTop:2 }}>{l}</div>
@@ -1799,6 +2123,13 @@ export default function App() {
                       style={{ display:'flex', alignItems:'center', gap:5, padding:'8px 12px', borderRadius:8, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:600, cursor:'pointer', background:'transparent', color:'#888', border:'1.5px solid #eee' }}>
                       <Ic n="copy" s={14}/>
                     </button>
+                    {/* Admin: eliminar obra desde feed */}
+                    {session?.user?.id === ADMIN_USER_ID && (
+                      <button onClick={()=>{ if(window.confirm('¿Eliminar esta obra y todas sus pujas?')) handleDeleteProject(proj.id) }}
+                        style={{ display:'flex', alignItems:'center', gap:4, padding:'8px 12px', borderRadius:8, fontFamily:'Syne,sans-serif', fontSize:12, fontWeight:700, cursor:'pointer', background:'#fdecea', color:'#c0392b', border:'1px solid #f5c6c2' }}>
+                        <Ic n="trash" s={13}/> Eliminar
+                      </button>
+                    )}
                     <div style={{ marginLeft:'auto', fontFamily:'Syne,sans-serif', fontSize:11, fontWeight:700, padding:'6px 12px', borderRadius:8, display:'flex', alignItems:'center', gap:4, background:dlStyle.bg, color:dlStyle.col }}>
                       <Ic n="clock" s={11}/>{proj.estado==='cerrada'?'Cerrada':dl<=0?'Vence hoy':`${dl}d restantes`}
                     </div>
@@ -1814,6 +2145,7 @@ export default function App() {
       {detailProj && <DetailPanel proj={detailProj} bids={bids} user={session?.user} company={company} onClose={()=>setDetailId(null)} onBid={handleBid}/>}
       {showNew    && <NewProjectModal company={company} session={session} onClose={()=>setShowNew(false)} onSubmit={handleNewProject}/>}
       {showProfile && <ProfilePanel user={session.user} company={company} projects={projects} bids={bids} onClose={()=>setShowProfile(false)} onOpenDetail={handleOpenDetail} onNewMsg={handleNewMsg} onCompanyUpdate={updates=>setCompany(prev=>({...prev,...updates}))} onDeleteProject={handleDeleteProject} onDeleteBid={handleDeleteBid} isAdmin={session.user.id===ADMIN_USER_ID}/>}
+      {showNotifs && <NotifPanel user={session.user} onClose={()=>{ setShowNotifs(false); setNoLeidosNotif(0) }}/>}
       {showMsgs   && <MessagesPanel user={session.user} company={company} onClose={()=>setShowMsgs(false)} initialTarget={msgTarget} isAdmin={session.user.id===ADMIN_USER_ID}/>}
       {toast      && <Toast msg={toast}/>}
     </div>
