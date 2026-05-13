@@ -275,14 +275,14 @@ function AuthScreen({ onLogin }) {
 }
 
 // ─── FORMULARIO PUJA ──────────────────────────────────────────────────────────
-function BidForm({ partida, onSubmit, onCancel }) {
-  const [precio, setPrecio]         = useState('')
-  const [plazo, setPlazo]           = useState('')
-  const [obs, setObs]               = useState('')
-  const [tel, setTel]               = useState('')
-  const [validezTipo, setValidezT]  = useState('indefinida')
-  const [validezFecha, setValidezF] = useState('')
-  const [archivos, setArchivos]     = useState([])
+function BidForm({ partida, onSubmit, onCancel, initialData }) {
+  const [precio, setPrecio]         = useState(initialData?.precio?.toString()||'')
+  const [plazo, setPlazo]           = useState(initialData?.plazo?.toString()||'')
+  const [obs, setObs]               = useState(initialData?.observaciones||'')
+  const [tel, setTel]               = useState(initialData?.telefono||'')
+  const [validezTipo, setValidezT]  = useState(initialData?.validez_tipo||'indefinida')
+  const [validezFecha, setValidezF] = useState(initialData?.validez_fecha||'')
+  const [archivos, setArchivos]     = useState(initialData?.archivos||[])
   const [loading, setLoading]       = useState(false)
 
   const num    = parseFloat(precio||0)
@@ -304,7 +304,7 @@ function BidForm({ partida, onSubmit, onCancel }) {
   return (
     <form onSubmit={submit} style={{ padding:16, background:'#fff9f5', borderTop:'2px solid #ffcba4' }}>
       <div style={{ fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700, marginBottom:12, display:'flex', alignItems:'center', gap:6 }}>
-        <Ic n="lock" s={14}/> Oferta confidencial — solo la constructora verá tu precio
+        <Ic n="lock" s={14}/> {initialData ? 'Actualiza tu oferta — el publicador verá los cambios' : 'Oferta confidencial — solo la constructora verá tu precio'}
       </div>
       <div style={{ background:'#fff2ec', border:'1px solid #ffcba4', borderRadius:6, padding:'9px 13px', marginBottom:13, fontSize:12, color:'#c94f03' }}>
         Precio salida: <strong>{fmt(partida.precioSalida)}/{partida.unidad}</strong> — Medición: <strong>{partida.medicion} {partida.unidad}</strong> — Total ref: <strong>{fmt(partida.medicion*partida.precioSalida)}</strong>
@@ -358,6 +358,9 @@ function BidForm({ partida, onSubmit, onCancel }) {
 function DetailPanel({ proj, bids, user, company, onClose, onBid, onDeleteBid, setProjects }) {
   const [openForm, setOpenForm]     = useState(null)
   const [copied, setCopied]         = useState(false)
+  const [rechazando, setRechazando] = useState(null) // bid.id que se está rechazando
+  const [motivoRechazo, setMotivo]  = useState('')
+  const [puedeActualizar, setPuedeAct] = useState(true)
   const [visLocal, setVisLocal]     = useState({
     mostrar_num_pujas: proj.mostrar_num_pujas||false,
     mostrar_empresas:  proj.mostrar_empresas||false,
@@ -519,60 +522,156 @@ function DetailPanel({ proj, bids, user, company, onClose, onBid, onDeleteBid, s
                 )}
 
                 {pBids.length > 0 ? pBids.map((bid,idx)=>{
-                  const saving = ((partida.precioSalida-bid.precio)/partida.precioSalida*100).toFixed(1)
-                  const rkCol  = idx===0?'#1a6b3a':idx===1?'#c97a0a':'#888'
-                  const esMia  = bid.user_id===user?.id
+                  const saving   = ((partida.precioSalida-bid.precio)/partida.precioSalida*100).toFixed(1)
+                  const rkCol    = idx===0?'#1a6b3a':idx===1?'#c97a0a':'#888'
+                  const esMia    = bid.user_id===user?.id
+                  const rechazada = bid.estado==='rechazada'
+                  const bgRow    = rechazada?'#f8f8f8':bid.estado==='adjudicada'?'#e5f4ec':esMia&&!esConstructora?'#fef9f5':'transparent'
                   return (
-                    <div key={bid.id} style={{ padding:'13px 16px', borderBottom:'1px solid #f0f0f0', display:'grid', gridTemplateColumns:'1fr auto', gap:10, alignItems:'start', background:bid.estado==='adjudicada'?'#e5f4ec':esMia&&!esConstructora?'#f8f7f4':'transparent' }}>
-                      <div>
-                        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:3 }}>
-                          {esConstructora && <div style={{ width:22, height:22, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:700, color:'#fff', background:rkCol, flexShrink:0 }}>{idx+1}</div>}
-                          <div>
-                            <div style={{ fontSize:13, fontWeight:700 }}>
-                              {esConstructora ? bid.empresa : 'Tu oferta'}
-                              {bid.estado==='adjudicada' && <span style={{ fontSize:10, background:'#1a6b3a', color:'#fff', padding:'2px 8px', borderRadius:4, fontWeight:700, marginLeft:6 }}>ADJUDICADA</span>}
+                    <div key={bid.id} style={{ borderBottom:'1px solid #f0f0f0', opacity:rechazada?.65:1 }}>
+                      <div style={{ padding:'13px 16px', display:'grid', gridTemplateColumns:'1fr auto', gap:10, alignItems:'start', background:bgRow }}>
+                        <div>
+                          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:3 }}>
+                            {esConstructora && !rechazada && <div style={{ width:22, height:22, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:700, color:'#fff', background:rkCol, flexShrink:0 }}>{idx+1}</div>}
+                            {rechazada && <div style={{ width:22, height:22, borderRadius:'50%', background:'#ddd', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12 }}>✕</div>}
+                            <div>
+                              <div style={{ fontSize:13, fontWeight:700, color:rechazada?'#999':'inherit' }}>
+                                {esConstructora ? bid.empresa : 'Tu oferta'}
+                                {bid.estado==='adjudicada' && <span style={{ fontSize:10, background:'#1a6b3a', color:'#fff', padding:'2px 8px', borderRadius:4, fontWeight:700, marginLeft:6 }}>ADJUDICADA</span>}
+                                {rechazada && <span style={{ fontSize:10, background:'#eee', color:'#888', padding:'2px 8px', borderRadius:4, fontWeight:700, marginLeft:6 }}>RECHAZADA</span>}
+                              </div>
+                              {esConstructora && <div style={{ fontSize:11, color:'#888', marginTop:1 }}>{bid.contacto}{bid.telefono?` — ${bid.telefono}`:''}</div>}
                             </div>
-                            {esConstructora && <div style={{ fontSize:11, color:'#888', marginTop:1 }}>{bid.contacto}{bid.telefono?` — ${bid.telefono}`:''}</div>}
+                          </div>
+                          {bid.observaciones && <div style={{ fontSize:12, color:rechazada?'#aaa':'#444', marginTop:7, lineHeight:1.55, fontStyle:'italic', padding:'8px 10px', background:'#f8f7f4', borderRadius:6, borderLeft:'3px solid #ddd' }}>"{bid.observaciones}"</div>}
+                          {/* Motivo de rechazo visible para todos */}
+                          {rechazada && bid.feedback && (
+                            <div style={{ marginTop:8, padding:'10px 12px', background:'#f5f5f5', borderRadius:6, borderLeft:'3px solid #ccc' }}>
+                              <div style={{ fontSize:11, fontWeight:700, color:'#888', marginBottom:3 }}>MOTIVO DEL RECHAZO</div>
+                              <div style={{ fontSize:13, color:'#555' }}>{bid.feedback}</div>
+                              {bid.puede_actualizar && esMia && (
+                                <div style={{ marginTop:8, fontSize:12, color:'#1a4d7a', fontWeight:600 }}>
+                                  El publicador te invita a mejorar tu oferta
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {!rechazada && bid.feedback && (
+                            <div style={{ marginTop:8, padding:'8px 10px', background:'#fef3e2', borderRadius:6, fontSize:12, color:'#c97a0a', borderLeft:'3px solid #c97a0a' }}>
+                              <strong>Feedback:</strong> "{bid.feedback}"
+                              {bid.rating && <div style={{ display:'flex', gap:2, marginTop:4 }}>{[1,2,3,4,5].map(i=><span key={i} style={{ fontSize:13, color:i<=bid.rating?'#e85d04':'#ddd' }}>★</span>)}</div>}
+                            </div>
+                          )}
+                          <div style={{ display:'flex', gap:12, marginTop:6, flexWrap:'wrap' }}>
+                            {bid.plazo>0 && <span style={{ fontSize:11, color:'#888' }}>Plazo: {bid.plazo}d</span>}
+                            <span style={{ fontSize:11, color:'#888' }}>{bid.fecha}</span>
+                            {bid.validez_tipo==='fecha' && bid.validez_fecha && <span style={{ fontSize:11, color:'#c97a0a' }}>Válida hasta: {bid.validez_fecha}</span>}
+                          </div>
+                          {bid.archivos?.length>0 && (
+                            <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginTop:8 }}>
+                              {bid.archivos.map(a=>(
+                                <a key={a.path} href={a.url} target="_blank" rel="noreferrer" style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 9px', background:'#f0ecff', border:'1px solid #d4c8ff', borderRadius:5, fontSize:11, color:'#5a3fa0', textDecoration:'none' }}>
+                                  <Ic n="file" s={11}/> {a.nombre}
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                          {/* Botón actualizar oferta — solo para el pujador si fue rechazada con opción de mejora */}
+                          {esMia && rechazada && bid.puede_actualizar && (
+                            <button onClick={()=>setOpenForm('update-'+bid.id)}
+                              style={{ marginTop:10, display:'flex', alignItems:'center', gap:6, padding:'8px 14px', background:'#e5eef7', border:'1px solid #b8cde0', borderRadius:6, color:'#1a4d7a', cursor:'pointer', fontSize:12, fontWeight:700, fontFamily:'Syne,sans-serif' }}>
+                              Mejorar y reenviar oferta
+                            </button>
+                          )}
+                        </div>
+                        <div style={{ textAlign:'right' }}>
+                          <div style={{ fontSize:10, color:'#888', marginBottom:2 }}>precio/ud</div>
+                          <div style={{ fontFamily:'JetBrains Mono,monospace', fontSize:18, fontWeight:600, color:rechazada?'#aaa':idx===0&&esConstructora?'#1a6b3a':'#333', textDecoration:rechazada?'line-through':'none' }}>{fmt(bid.precio)}</div>
+                          {esConstructora && !rechazada && <span style={{ fontSize:11, fontWeight:700, padding:'2px 7px', borderRadius:4, display:'inline-block', marginTop:3, background:parseFloat(saving)>0?'#e5f4ec':'#fdecea', color:parseFloat(saving)>0?'#1a6b3a':'#c0392b' }}>
+                            {parseFloat(saving)>0?'-':'+'}{Math.abs(saving)}% vs salida
+                          </span>}
+                          {/* Acciones del dueño: rechazar (no eliminar) */}
+                          {esDuenio && bid.estado==='pendiente' && (
+                            <button onClick={()=>{ setRechazando(bid.id); setMotivo(''); setPuedeAct(true) }}
+                              style={{ display:'block', marginTop:8, marginLeft:'auto', background:'#fdecea', border:'1px solid #f5c6c2', color:'#c0392b', borderRadius:4, padding:'5px 12px', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'Syne,sans-serif' }}>
+                              Rechazar
+                            </button>
+                          )}
+                          {/* Admin: puede eliminar físicamente */}
+                          {esAdmin && onDeleteBid && (
+                            <button onClick={()=>{ if(window.confirm('¿Eliminar esta oferta permanentemente?')) onDeleteBid(bid.id) }}
+                              style={{ display:'block', marginTop:6, marginLeft:'auto', background:'#f5f5f5', border:'1px solid #ddd', color:'#888', borderRadius:4, padding:'4px 10px', fontSize:10, fontWeight:700, cursor:'pointer', fontFamily:'Syne,sans-serif' }}>
+                              Eliminar (admin)
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* FORMULARIO DE RECHAZO — inline bajo la puja */}
+                      {rechazando===bid.id && (
+                        <div style={{ padding:'14px 16px', background:'#fff5f5', borderTop:'1px solid #f5c6c2' }}>
+                          <div style={{ fontFamily:'Syne,sans-serif', fontSize:12, fontWeight:700, color:'#c0392b', marginBottom:10 }}>MOTIVO DEL RECHAZO (obligatorio)</div>
+                          <textarea
+                            style={{ width:'100%', padding:'9px 12px', border:'1.5px solid #f5c6c2', borderRadius:6, fontSize:13, outline:'none', resize:'vertical', minHeight:72, fontFamily:'Barlow,sans-serif', boxSizing:'border-box' }}
+                            placeholder="Ej: El precio está por encima del mercado. El plazo de ejecución es demasiado largo..."
+                            value={motivoRechazo} onChange={e=>setMotivo(e.target.value)}
+                          />
+                          <label style={{ display:'flex', alignItems:'center', gap:8, marginTop:10, cursor:'pointer', fontSize:13 }}>
+                            <input type="checkbox" checked={puedeActualizar} onChange={e=>setPuedeAct(e.target.checked)} style={{ width:16, height:16, accentColor:'#1a4d7a' }}/>
+                            <span>Dar oportunidad al pujador de mejorar y reenviar su oferta</span>
+                          </label>
+                          <div style={{ display:'flex', gap:8, marginTop:12 }}>
+                            <button
+                              disabled={!motivoRechazo.trim()}
+                              onClick={async ()=>{
+                                if (!motivoRechazo.trim()) return
+                                const { error } = await supabase.from('bids').update({
+                                  estado: 'rechazada',
+                                  feedback: motivoRechazo.trim(),
+                                  puede_actualizar: puedeActualizar
+                                }).eq('id', bid.id)
+                                if (error) { alert('Error: '+error.message); return }
+                                setBids(prev=>prev.map(b=>b.id===bid.id?{...b, estado:'rechazada', feedback:motivoRechazo.trim(), puede_actualizar:puedeActualizar}:b))
+                                // Notificar al pujador
+                                await supabase.from('notifications').insert([{
+                                  user_id: bid.user_id,
+                                  tipo:    'puja',
+                                  titulo:  `Tu oferta en "${proj.nombre}" ha sido rechazada`,
+                                  mensaje: `Motivo: ${motivoRechazo.trim()}${puedeActualizar?' — Puedes mejorar y reenviar tu oferta.':''}`,
+                                  data:    JSON.stringify({ proyecto_id: proj.id })
+                                }]).catch(()=>{})
+                                setRechazando(null); setMotivo('')
+                              }}
+                              style={{ background:'#c0392b', color:'#fff', border:'none', padding:'9px 20px', borderRadius:6, fontFamily:'Syne,sans-serif', fontSize:13, fontWeight:700, cursor:'pointer', opacity:!motivoRechazo.trim()?.4:1 }}>
+                              Confirmar rechazo
+                            </button>
+                            <button onClick={()=>setRechazando(null)}
+                              style={{ background:'transparent', color:'#888', border:'1.5px solid #ddd', padding:'9px 14px', borderRadius:6, fontFamily:'Syne,sans-serif', fontSize:13, cursor:'pointer' }}>
+                              Cancelar
+                            </button>
                           </div>
                         </div>
-                        {bid.observaciones && <div style={{ fontSize:12, color:'#444', marginTop:7, lineHeight:1.55, fontStyle:'italic', padding:'8px 10px', background:'#f8f7f4', borderRadius:6, borderLeft:'3px solid #ddd' }}>"{bid.observaciones}"</div>}
-                        <div style={{ display:'flex', gap:12, marginTop:6, flexWrap:'wrap' }}>
-                          {bid.plazo>0 && <span style={{ fontSize:11, color:'#888' }}>Plazo: {bid.plazo}d</span>}
-                          <span style={{ fontSize:11, color:'#888' }}>{bid.fecha}</span>
-                          {bid.validez_tipo==='fecha' && bid.validez_fecha && <span style={{ fontSize:11, color:'#c97a0a' }}>Válida hasta: {bid.validez_fecha}</span>}
-                          {bid.validez_tipo==='indefinida' && <span style={{ fontSize:11, color:'#888' }}>Validez indefinida</span>}
-                        </div>
-                        {/* Archivos de la puja */}
-                        {bid.archivos?.length>0 && (
-                          <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginTop:8 }}>
-                            {bid.archivos.map(a=>(
-                              <a key={a.path} href={a.url} target="_blank" rel="noreferrer" style={{ display:'flex', alignItems:'center', gap:4, padding:'4px 9px', background:'#f0ecff', border:'1px solid #d4c8ff', borderRadius:5, fontSize:11, color:'#5a3fa0', textDecoration:'none' }}>
-                                <Ic n="file" s={11}/> {a.nombre}
-                              </a>
-                            ))}
-                          </div>
-                        )}
-                        {bid.feedback && (
-                          <div style={{ marginTop:8, padding:'8px 10px', background:'#fef3e2', borderRadius:6, fontSize:12, color:'#c97a0a', borderLeft:'3px solid #c97a0a' }}>
-                            <strong>Feedback:</strong> "{bid.feedback}"
-                            {bid.rating && <div style={{ display:'flex', gap:2, marginTop:4 }}>{[1,2,3,4,5].map(i=><span key={i} style={{ fontSize:13, color:i<=bid.rating?'#e85d04':'#ddd' }}>★</span>)}</div>}
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ textAlign:'right' }}>
-                        <div style={{ fontSize:10, color:'#888', marginBottom:2 }}>precio/ud</div>
-                        <div style={{ fontFamily:'JetBrains Mono,monospace', fontSize:18, fontWeight:600, color:idx===0&&esConstructora?'#1a6b3a':'#333' }}>{fmt(bid.precio)}</div>
-                        {esConstructora && <span style={{ fontSize:11, fontWeight:700, padding:'2px 7px', borderRadius:4, display:'inline-block', marginTop:3, background:parseFloat(saving)>0?'#e5f4ec':'#fdecea', color:parseFloat(saving)>0?'#1a6b3a':'#c0392b' }}>
-                          {parseFloat(saving)>0?'-':'+'}{Math.abs(saving)}% vs salida
-                        </span>}
-                        {(esAdmin || esDuenio) && onDeleteBid && (
-                          <button
-                            onClick={()=>{ if(window.confirm('¿Eliminar esta oferta?')) onDeleteBid(bid.id) }}
-                            style={{ display:'block', marginTop:8, marginLeft:'auto', background:'#fdecea', border:'1px solid #f5c6c2', color:'#c0392b', borderRadius:4, padding:'4px 10px', fontSize:11, fontWeight:700, cursor:'pointer', fontFamily:'Syne,sans-serif' }}>
-                            Eliminar oferta
-                          </button>
-                        )}
-                      </div>
+                      )}
+
+                      {/* FORMULARIO ACTUALIZAR OFERTA — para el pujador */}
+                      {openForm==='update-'+bid.id && esMia && (
+                        <BidForm partida={partida} initialData={bid} onSubmit={async f=>{
+                          // Actualizar la puja rechazada con los nuevos datos
+                          const updates = { precio:parseFloat(f.precio), plazo:parseInt(f.plazo)||0, observaciones:f.obs||'', estado:'pendiente', feedback:null, puede_actualizar:false, validez_tipo:f.validezTipo||'indefinida', validez_fecha:f.validezFecha||null, archivos:f.archivos||bid.archivos }
+                          const { error } = await supabase.from('bids').update(updates).eq('id', bid.id)
+                          if (!error) {
+                            setBids(prev=>prev.map(b=>b.id===bid.id?{...b,...updates}:b))
+                            // Notificar al dueño de la obra
+                            await supabase.from('notifications').insert([{
+                              user_id: proj.user_id, tipo:'puja',
+                              titulo:  `Oferta actualizada en "${proj.nombre}"`,
+                              mensaje: `${bid.empresa} ha mejorado su oferta para la partida "${partida.descripcion}".`,
+                              data:    JSON.stringify({ proyecto_id: proj.id })
+                            }]).catch(()=>{})
+                          }
+                          setOpenForm(null)
+                        }} onCancel={()=>setOpenForm(null)}/>
+                      )}
                     </div>
                   )
                 }) : (
